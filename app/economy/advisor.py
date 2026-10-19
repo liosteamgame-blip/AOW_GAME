@@ -27,11 +27,8 @@ def local_upgrade_advice(city: str, bag: dict) -> str:
     coins = float(bag.get("سکه") or 0)
     food = float(bag.get("غذا") or 0)
     pop = float(bag.get("جمعیت") or 0)
-    wood = float(bag.get("چوب") or 0)
     iron = float(bag.get("آهن") or bag.get("اهن") or 0)
-    stone = float(bag.get("سنگ") or 0)
     powder = float(bag.get("باروت") or 0)
-    cloth = float(bag.get("پوشاک") or 0)
     authority = float(bag.get("اقتدار") or 40)
 
     prod = {
@@ -166,7 +163,7 @@ def local_upgrade_advice(city: str, bag: dict) -> str:
 
     lines = [
         f"🧠 <b>مشاور ارتقا — {e(city)}</b>",
-        f"<i>طبق قوانین رسمی خاکستر جنگ · هزینه و بازده واقعی</i>",
+        "<i>طبق قوانین رسمی خاکستر جنگ · هزینه و بازده واقعی</i>",
         DIV,
         f"💰 سکه <b>{fmt_num(coins)}</b> · 🍽 غذا <b>{fmt_num(food)}</b> · 👥 جمعیت <b>{fmt_num(pop)}</b>",
         f"🛡 پیاده≈<b>{fmt_num(infantry)}</b> · 🐴 سواره≈<b>{fmt_num(cavalry)}</b> · 🧨 توپ≈<b>{fmt_num(arty)}</b> · ⚓️ ناو≈<b>{fmt_num(navy)}</b>",
@@ -289,7 +286,6 @@ def build_optimal_plan(
     plan = []
 
     def try_add(name, levels, forced=False):
-        nonlocal stock
         t = UPGRADE_TABLE.get(name)
         if not t:
             return False

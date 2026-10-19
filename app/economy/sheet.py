@@ -902,7 +902,6 @@ def _parse_shop_packs(text: str) -> list:
     i = 0
     while i < len(lines):
         ln = lines[i]
-        low = ln.replace("ي", "ی").lower()
         # وزیر
         if re.search(r"وزیر", ln):
             name = re.sub(r"^.*?وزیر\s*", "", ln).strip(" :-|")

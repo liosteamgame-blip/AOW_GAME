@@ -3,13 +3,15 @@ import logging
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-import app.handlers  # noqa: F401  — ثبت همه هندلرها (ترتیب داخل app/handlers/__init__.py)
+from app import handlers  # ثبت همه هندلرها (ترتیب داخل app/handlers/__init__.py)
 from app import state as app_state
 from app.art import load_art
 from app.config import ADMIN_ID, CHANNEL_ID
 from app.factions import migrate_city_names, seed_default_cities
 from app.keyboards import _btn
 from app.loader import bot, dp
+
+HANDLER_MODULES = tuple(handlers.__all__)  # فقط برای لاگ/تست؛ import بالا هندلرها را ثبت می‌کند
 from app.scheduler import periodic_backup_loop, timing_scheduler_loop
 from app.state import GROUPS, PLAYER_CODES, all_players, backup_state, spawn
 from app.storage import _load_mid, apply_data, init_storage, push_backup, read_local, save_data

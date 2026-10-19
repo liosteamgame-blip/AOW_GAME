@@ -50,7 +50,7 @@ async def notify_target_threat(
         if extra:
             body += f"{extra}\n"
         body += (
-            f"\n⚠️ آماده دفاع شوید. آمار مهاجم در کانال اصلی اعلام شده است."
+            "\n⚠️ سرورم، آماده دفاع شوید. آمار لشکر مهاجم محرمانه است؛ دیده‌بانان را به کار بگیرید."
             + (f"\n🆔 اکشن: <code>{action_id}</code>" if action_id else "")
         )
         builder = InlineKeyboardBuilder()

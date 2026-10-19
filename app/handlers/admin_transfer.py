@@ -115,7 +115,7 @@ async def admin_transfer_to_city(callback: types.CallbackQuery, state: FSMContex
     if not is_admin(callback.from_user.id):
         return await callback.answer()
     parts = callback.data.split(":")
-    idx, side = int(parts[1]), parts[2]
+    idx = int(parts[1])
     d = await state.get_data()
     cities = d.get("trf_to_cities") or []
     src = d.get("trf_src")

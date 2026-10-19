@@ -681,7 +681,6 @@ async def handle_advise_city(callback: types.CallbackQuery, state: FSMContext):
     mode = parts[3] if len(parts) > 3 else (await state.get_data()).get("advise_mode", "balance")
     if side not in FACTIONS:
         return await callback.answer("ساید نامعتبر", show_alert=True)
-    my_side = leader_side(uid) or side_of_user(uid)
     if is_plain_player(uid):
         return await callback.answer("❌ فقط شهر خودتان از منوی مشاور.", show_alert=True)
     if not is_admin(uid) and leader_side(uid) and leader_side(uid) != side:
