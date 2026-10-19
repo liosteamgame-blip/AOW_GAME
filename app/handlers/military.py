@@ -20,6 +20,7 @@ from app.keyboards import (
     get_trade_mtype_keyboard,
 )
 from app.menus import go_menu
+from app.screens import ask_camp_time
 from app.handlers.groups import _link_group_to_city
 
 
@@ -61,13 +62,13 @@ async def handle_type_pick(callback: types.CallbackQuery, state: FSMContext):
     if kind == "campaign":
         await callback.message.answer(
             CAMP_ORIGIN_PROMPT + "\n\n📋 از منوی شهر انتخاب کنید یا ورود دستی:",
-            reply_markup=get_cities_keyboard("camp_origin"),
+            reply_markup=get_cities_keyboard("camp_origin", user_id=uid, kind=kind),
         )
         await state.set_state(GameStates.camp_origin)
     else:
         await callback.message.answer(
             ORDERS[kind]["ask_target"] + "\n\n📋 از منوی شهر انتخاب کنید یا ورود دستی:",
-            reply_markup=get_cities_keyboard("order_target"),
+            reply_markup=get_cities_keyboard("order_target", user_id=uid, kind=kind),
         )
         await state.set_state(GameStates.order_target)
 
@@ -154,13 +155,11 @@ async def handle_city_faction(callback: types.CallbackQuery, state: FSMContext):
 async def handle_city_fac_back(callback: types.CallbackQuery, state: FSMContext):
     field = callback.data.split(":", 1)[1]
     await callback.answer()
+    kb = get_country_keyboard(field, user_id=callback.from_user.id, kind=(await state.get_data()).get("kind"))
     try:
-        await callback.message.edit_text(
-            "🌍 ابتدا <b>کشور</b> را انتخاب کنید:",
-            reply_markup=get_country_keyboard(field),
-        )
+        await callback.message.edit_text("🌍 ابتدا <b>کشور</b> را انتخاب کنید:", reply_markup=kb)
     except Exception:
-        await callback.message.answer("🌍 کشور را انتخاب کنید:", reply_markup=get_country_keyboard(field))
+        await callback.message.answer("🌍 کشور را انتخاب کنید:", reply_markup=kb)
 
 
 @dp.callback_query(F.data.startswith("citypick:"))
@@ -265,14 +264,7 @@ async def process_camp_stats(message: types.Message, state: FSMContext):
     if txt == "__BACK__":
         return await go_menu(message, state)
     await state.update_data(stats=txt)
-    await message.answer(
-        "⏳ <b>زمان رسیدن</b> را بفرستید:\n"
-        "• ساعت: <code>12:00</code>\n"
-        "• یا دقیقه از الان: <code>45</code> (مثلاً ۹:۳۱ + ۴۵ → ۱۰:۱۶)\n"
-        "• چند زمان: <code>12:00,14:30</code>\n↩️ ریپلای کنید.",
-        reply_markup=get_back_keyboard(),
-    )
-    await state.set_state(GameStates.camp_time)
+    await ask_camp_time(message, state)
 
 
 @dp.message(GameStates.camp_time)

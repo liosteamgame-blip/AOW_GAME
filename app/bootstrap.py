@@ -12,7 +12,7 @@ from app.keyboards import _btn
 from app.loader import bot, dp
 
 HANDLER_MODULES = tuple(handlers.__all__)  # فقط برای لاگ/تست؛ import بالا هندلرها را ثبت می‌کند
-from app.scheduler import periodic_backup_loop, timing_scheduler_loop
+from app.scheduler import arrivals_loop, periodic_backup_loop, timing_scheduler_loop
 from app.state import GROUPS, PLAYER_CODES, all_players, backup_state, spawn
 from app.storage import _load_mid, apply_data, init_storage, push_backup, read_local, save_data
 
@@ -53,6 +53,7 @@ async def main():
     # حلقه‌های پس‌زمینه
     spawn(timing_scheduler_loop())
     spawn(periodic_backup_loop())
+    spawn(arrivals_loop())
     try:
         builder = InlineKeyboardBuilder()
         builder.row(_btn("📢 ارسال پیام آپدیت به گروه‌ها", "adm_send_update", "primary"))

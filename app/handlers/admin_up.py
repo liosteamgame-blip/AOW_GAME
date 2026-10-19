@@ -20,9 +20,9 @@ from app.economy.assets import is_auto_city
 from app.economy.up import (
     restore_city_up,
     run_weekly_up_for_city,
-    send_up_receipts,
     snapshot_all_assets,
 )
+from app.economy.reportcard import send_up_result
 
 
 @dp.callback_query(F.data == "adm_auto")
@@ -108,13 +108,17 @@ async def admin_up_all(callback: types.CallbackQuery):
     n_snap = snapshot_all_assets(reason="up_all")
     save_data(critical=True)
     results = []
+    done = []
     for city in list(AUTO_CITIES.keys()):
         if not AUTO_CITIES.get(city):
             continue
         log = run_weekly_up_for_city(city, force=False)
         results.append(log)
+        done.append((city, log))
+    # کارنامه/رسید بعد از آپ همه شهرها — تا رتبه‌ها با وضعیت نهایی مقایسه شوند
+    for city, log in done:
         try:
-            await send_up_receipts(city, log)
+            await send_up_result(city, log)
         except Exception:
             logging.exception("رسید آپ %s", city)
     if not results:
@@ -215,7 +219,7 @@ async def admin_up_one(callback: types.CallbackQuery):
     await callback.answer(f"آپ {city}…")
     log = run_weekly_up_for_city(city, force=True)
     try:
-        await send_up_receipts(city, log)
+        await send_up_result(city, log)
     except Exception:
         logging.exception("رسید آپ %s", city)
     save_data(critical=True)

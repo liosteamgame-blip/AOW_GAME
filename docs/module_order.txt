@@ -4,8 +4,10 @@ app.loader
 app.state
 app.utils
 app.features
+app.ai
 app.audit
 app.factions
+app.chronicle
 app.states
 app.players
 app.permissions
@@ -23,8 +25,10 @@ app.economy.assets
 app.economy.views
 app.economy.up
 app.economy.advisor
+app.economy.reportcard
 app.economy.merchants
 app.threats
+app.arrivals
 app.screens
 app.flows
 app.approvals
@@ -53,6 +57,8 @@ app.handlers.channel_buttons
 app.handlers.admin_features
 app.handlers.leader_panel
 app.handlers.commander
+app.handlers.chronicle_panel
+app.handlers.quick_order
 app.handlers.fallback
 app.scheduler
 app.bootstrap

@@ -10,6 +10,7 @@ from app.utils import _parse_hhmm
 from app.gametime import is_game_day_open
 from app.storage import push_backup
 from app.channel import _broadcast_timing_to_groups
+from app.arrivals import tick as arrivals_tick
 
 
 # آخرین تاریخ ارسال خودکار استارت/استاپ (YYYY-MM-DD) تا دوبار نفرستد
@@ -67,3 +68,13 @@ async def periodic_backup_loop():
             logging.info("periodic backup pushed")
         except Exception:
             logging.exception("periodic_backup_loop")
+
+
+async def arrivals_loop():
+    """هر ۳۰ ثانیه: شمارش معکوس پست‌های کانال و اعلام رسیدن لشکر/کاروان (بدون xAI)."""
+    while True:
+        try:
+            await arrivals_tick()
+        except Exception:
+            logging.exception("arrivals_loop")
+        await asyncio.sleep(30)

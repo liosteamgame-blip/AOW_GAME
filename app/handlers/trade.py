@@ -35,6 +35,8 @@ from app.storage import save_data
 from app.channel import post_to_channel
 from app.menus import go_menu
 from app.economy.assets import consume_trade_house_cap, release_trade_house_cap
+from app.arrivals import schedule
+from app.chronicle import record_event
 from app.economy.merchants import (
     apply_merchant_trade_to_city,
     format_merchant_catalog,
@@ -56,12 +58,12 @@ async def trade_kind_pick(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.edit_text(
                 "🐪 <b>فرم کاروان تجاری (بازیکن)</b>\n" + DIV + "\n\n"
                 "📍 <b>مبدا تجارت</b> را از منو انتخاب کنید:",
-                reply_markup=get_cities_keyboard("trade_origin"),
+                reply_markup=get_cities_keyboard("trade_origin", user_id=callback.from_user.id),
             )
         except Exception:
             await callback.message.answer(
                 "📍 <b>مبدا تجارت</b> را انتخاب کنید:",
-                reply_markup=get_cities_keyboard("trade_origin"),
+                reply_markup=get_cities_keyboard("trade_origin", user_id=callback.from_user.id),
             )
         await state.set_state(GameStates.trade_origin)
         return
@@ -258,6 +260,9 @@ async def admin_trade_approve(callback: types.CallbackQuery):
         }
         tr["status"] = "approved"
         PENDING_TRADES[tid] = tr
+        schedule(action_id, tr.get("time", "-"), public_text, bool(getattr(sent, "photo", None)),
+                 via="caravan", city=city)
+        record_event("caravan", city=city, origin=tr.get("origin"), dest=tr.get("dest"), mtype=mtype)
         save_data(critical=True)
         await callback.answer("✅ منتشر شد")
         try:

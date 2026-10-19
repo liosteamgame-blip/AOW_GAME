@@ -1,6 +1,7 @@
 {
   "message": [
     "assistant_perms_cmd",
+    "chronicle_cmd",
     "handle_narrator_role",
     "leader_msg_draft",
     "leader_poll_draft"
@@ -14,7 +15,11 @@
     "admin_features_menu",
     "admin_roles_menu",
     "assistant_perms_cb",
-    "leader_panel_router"
+    "chronicle_cb",
+    "handle_advise_ai",
+    "leader_panel_router",
+    "my_cities",
+    "quick_last"
   ],
   "poll_answer": [
     "leader_poll_vote"

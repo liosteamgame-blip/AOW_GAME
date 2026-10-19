@@ -102,3 +102,10 @@
 - `app/approvals.py`: تایید دونفره (حذف شهر/بازیابی/واگذاری). کار حساس جدید: `needs_approval()` و `request_approval()` + یک شاخه در `execute()`.
 - ثبت middlewareها در `app/handlers/__init__.py`.
 - هندلر جدید باید در `tests/fixtures/added_handlers.json` ثبت شود (تست ساختار). لایه‌بندی import با `test_import_layers` خودکار چک می‌شود.
+
+## مرحله ۲ — قراردادها
+- **xAI فقط از `app/ai.py` (`ask`)** صدا زده می‌شود؛ سقف روزانه (`ai_daily_limit`) و کش دارد. فقط از دکمه‌ی کاربر (مشاور «بازنگری گروک»، وقایع‌نامه «بازنویسی با گروک»). تست `test_advisor_does_not_call_ai_without_button` نگهبان این قانون است.
+- **وقایع‌نامه:** هر پست عمومی جدید کانال با `app.chronicle.record_event(kind, ...)` ثبت شود؛ فقط فیلدهای `PUBLIC_FIELDS` ذخیره می‌شوند (هرگز آمار).
+- **رسیدن:** اکشن جدیدی که زمان رسیدن دارد `app.arrivals.schedule(...)` بگیرد؛ تغییر زمان با `reschedule`. حلقه در `scheduler.arrivals_loop`.
+- **رتبه:** `app.economy.views.city_ranks(city)` فقط رتبه‌ی همان شهر را می‌دهد؛ عدد شهرهای دیگر را به پلیر نشان نده.
+- **کارنامه:** بعد از آپ `reportcard.send_up_result` (نه `send_up_receipts` مستقیم).

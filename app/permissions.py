@@ -195,6 +195,7 @@ CALLBACK_ACL = (
     ("appr:", "approve.sensitive"),
     ("ldr:", "leader.panel"),
     ("asst:", "assistants.manage"),
+    ("chr:", "chronicle.publish"),
 )
 # مسیرهای gasset که فقط ادمین است (تازه‌سازی برای پلیر آزاد است)
 GASSET_ADMIN = ("gasset:edit:", "gasset:shop:", "gasset:lv:", "gasset:loss:", "gasset:buff:")

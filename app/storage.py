@@ -13,13 +13,18 @@ from app import state as app_state
 from app.config import ADMIN_ID, BACKUP_CHAT_ID, BACKUP_NAME, DATA_FILE, DIV, MAX_LEADERS, TZ
 from app.loader import bot
 from app.state import (
+    AI_CACHE,
     AUDIT_LOG,
     AUTO_CITIES,
     CITY_ASSETS,
+    CHRONICLE,
+    CHRONICLE_MAX,
     CITY_BUFFS,
+    CITY_RANKS,
     DEFAULT_MERCHANT_LIMITS,
     EXTRA_ROLES,
     GROUPS,
+    LAST_ORDERS,
     LEADERS,
     LEADER_POLLS,
     MERCHANT_LIMITS,
@@ -73,6 +78,10 @@ def snapshot():
             k: dict(v) for k, v in list(PENDING_APPROVALS.items())[-50:]
         },
         "leader_polls": {k: dict(v) for k, v in list(LEADER_POLLS.items())[-30:]},
+        "chronicle": list(CHRONICLE[-CHRONICLE_MAX:]),
+        "city_ranks": {k: dict(v) for k, v in CITY_RANKS.items()},
+        "last_orders": {k: dict(v) for k, v in LAST_ORDERS.items()},
+        "ai_cache": {k: dict(v) for k, v in list(AI_CACHE.items())[-30:]},
     }
 
 
@@ -293,6 +302,15 @@ def _apply_stage1_data(raw):
     for k, v in (raw.get("leader_polls") or {}).items():
         if isinstance(v, dict):
             LEADER_POLLS[str(k)] = v
+    # مرحله ۲
+    CHRONICLE.clear()
+    CHRONICLE.extend(x for x in (raw.get("chronicle") or []) if isinstance(x, dict))
+    del CHRONICLE[:-CHRONICLE_MAX]
+    for target, key in ((CITY_RANKS, "city_ranks"), (LAST_ORDERS, "last_orders"), (AI_CACHE, "ai_cache")):
+        target.clear()
+        for k, v in (raw.get(key) or {}).items():
+            if isinstance(v, dict):
+                target[str(k)] = v
 
 
 def read_local():

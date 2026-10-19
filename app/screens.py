@@ -4,8 +4,10 @@ from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.config import DIV, XAI_API_KEY
-from app.utils import e, fmt_num, send_chunks
+from app.config import DIV, ORDERS, XAI_API_KEY
+from app.state import pending_confirms
+from app.states import GameStates
+from app.utils import e, fmt_num, mtype_tag, send_chunks
 from app.factions import FACTIONS, FACTION_META
 from app.players import (
     city_for_callback,
@@ -14,10 +16,11 @@ from app.players import (
     is_leader,
     is_player,
     leader_side,
+    player_group_access,
     resolve_player_city,
     side_of_user,
 )
-from app.keyboards import _btn, get_economy_menu_keyboard, get_inline_back_row
+from app.keyboards import _btn, get_back_keyboard, get_confirm_keyboard, get_economy_menu_keyboard, get_inline_back_row
 from app.economy.rules import UPGRADE_SECTIONS
 from app.economy.sheet import get_city_asset_stats, normalize_stats_keys
 from app.economy.assets import is_auto_city
@@ -129,7 +132,7 @@ async def start_upgrade_advise(callback: types.CallbackQuery, state: FSMContext)
     builder.row(_btn("⚖️ ترکیبی / بالانس", "advise_mode:balance", "success"))
     builder.row(_btn("💬 چت آزاد (پلن ۱–۲ پیام)", "advise_mode:chat", "primary"))
     builder.row(_btn("🔙 بازگشت", "menu:home"))
-    ai_note = "🤖 Grok فعال است." if XAI_API_KEY else "💡 کلید Grok را در Variables ریلوی (<code>XAI_API_KEY</code>) بگذارید."
+    ai_note = "🤖 بعد از تحلیل محلی، «بازنگری گروک» با دکمه (سقف روزانه دارد)." if XAI_API_KEY else "💡 کلید Grok را در Variables ریلوی (<code>XAI_API_KEY</code>) بگذارید."
     await callback.message.answer(
         f"🧠 <b>مشاور ارتقا</b>\n{DIV}\n"
         "نوع مشاوره را انتخاب کنید:\n"
@@ -218,3 +221,35 @@ async def start_asset_view(callback: types.CallbackQuery, state: FSMContext):
         f"{city_hint}",
         reply_markup=builder.as_markup(),
     )
+
+
+# ---------------- مراحل مشترک فرم فرمان‌ها (فرم عادی + «مثل دفعه قبل») ----------------
+CAMP_TIME_PROMPT = (
+    "⏳ <b>زمان رسیدن</b> را بفرستید:\n"
+    "• ساعت: <code>12:00</code>\n"
+    "• یا دقیقه از الان: <code>45</code> (مثلاً ۹:۳۱ + ۴۵ → ۱۰:۱۶)\n"
+    "• چند زمان: <code>12:00,14:30</code>\n↩️ ریپلای کنید."
+)
+
+
+async def ask_camp_time(message: types.Message, state: FSMContext):
+    await message.answer(CAMP_TIME_PROMPT, reply_markup=get_back_keyboard())
+    await state.set_state(GameStates.camp_time)
+
+
+async def show_order_confirm(message: types.Message, state: FSMContext, uid: int):
+    """کارت تایید محاصره/جنگ. uid جدا گرفته می‌شود چون message ممکن است پیام خود ربات باشد."""
+    d = await state.get_data()
+    pending_confirms[uid] = {"kind": d.get("kind", "siege"), "data": dict(d), "chat_id": message.chat.id}
+    _ok, ctx_city, _err = player_group_access(uid, message.chat.id, message.chat.type)
+    icon = "🔥" if d.get("kind") == "war" else "🏰"
+    await message.answer(
+        f"{icon} <b>پیش‌نویس فرمان {ORDERS[d['kind']]['noun']}</b>\n{DIV}\n"
+        f"👑 فرمانده: <b>{e(ctx_city or city_of(uid))}</b>\n"
+        f"🧭 نوع: <b>{mtype_tag(d)}</b>\n"
+        f"🎯 شهر هدف: <b>{e(d['target'])}</b>\n\n"
+        f"📊 <b>آمار ارتش:</b>\n<blockquote expandable>{e(d['stats'])}</blockquote>\n"
+        "سرورم، فرمان صادر شود؟",
+        reply_markup=get_confirm_keyboard(),
+    )
+    await state.set_state(GameStates.order_confirm)

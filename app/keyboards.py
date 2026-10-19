@@ -15,9 +15,9 @@ from app.config import (
     REPORT_CHANNEL_ID,
     TWEET_CHANNEL_ID,
 )
-from app.state import SETTINGS, authenticated_users
+from app.state import LAST_ORDERS, SETTINGS, authenticated_users
 from app.factions import FACTION_META, cities_by_faction, country_key
-from app.players import is_admin, is_leader, is_player, leader_side
+from app.players import is_admin, is_leader, is_player, leader_side, player_cities
 from app.features import enabled
 from app.permissions import roles_of
 
@@ -93,6 +93,8 @@ def get_economy_menu_keyboard(user_id=None):
             _btn("🗡 اقتدار / مشروعیت", "eco:politics", "primary"),
             _btn("🎛 باف/نرف آپ", "eco:buffpick", "primary"),
         )
+        if enabled("my_rank"):
+            builder.row(_btn("🏆 رتبه من", "eco:rank", "success"))
     if user_id and is_admin(user_id):
         builder.row(
             _btn("✏️ ویرایش دارایی", "menu:asset_edit", "danger"),
@@ -141,9 +143,23 @@ def _city_label(name: str) -> str:
     return label if len(label) <= 40 else label[:38] + "…"
 
 
-def get_country_keyboard(field: str):
-    """مرحله ۱: انتخاب کشور برای مبدا/مقصد."""
+QUICK_MY_CITY_FIELDS = ("camp_origin", "trade_origin")
+QUICK_LAST_FIELDS = {"camp_origin": ("campaign",), "order_target": ("siege", "war")}
+
+
+def get_country_keyboard(field: str, user_id: int | None = None, kind: str | None = None):
+    """مرحله ۱: انتخاب کشور برای مبدا/مقصد (+ «شهرهای من» و «مثل دفعه قبل» برای فرمان سریع)."""
     builder = InlineKeyboardBuilder()
+    if user_id and enabled("quick_order"):
+        quick = []
+        if field in QUICK_MY_CITY_FIELDS and player_cities(user_id):
+            quick.append(_btn("🏰 شهرهای من", f"mycity:{field}", "success"))
+        kinds = QUICK_LAST_FIELDS.get(field, ())
+        last = LAST_ORDERS.get(str(user_id)) or {}
+        if kind in kinds and last.get(kind):
+            quick.append(_btn("🔁 مثل دفعه قبل", f"quick:last:{kind}", "primary"))
+        if quick:
+            builder.row(*quick)
     for key, (flag, title) in FACTION_META.items():
         n = len(cities_by_faction(key))
         builder.row(_btn(f"{flag} {title} ({n})", f"cityfac:{field}:{key}"))
@@ -156,13 +172,14 @@ def get_country_keyboard(field: str):
     return builder.as_markup()
 
 
-def get_cities_keyboard(field: str, faction: str = None, page: int = 0, per_page: int = 8):
+def get_cities_keyboard(field: str, faction: str = None, page: int = 0, per_page: int = 8,
+                        user_id: int | None = None, kind: str | None = None):
     """
     منوی شهرها — اول کشور، بعد شهر همان کشور.
     اگر faction=None باشد کیبورد کشورها برمی‌گردد.
     """
     if faction is None:
-        return get_country_keyboard(field)
+        return get_country_keyboard(field, user_id=user_id, kind=kind)
 
     if faction == "other":
         cities = [c for c in cities_by_faction() if country_key(c) not in FACTION_META]
@@ -243,7 +260,7 @@ def get_admin_inline_keyboard():
         _btn("🎭 نقش‌ها", "adm_roles"),
         _btn("🔐 تاییدهای معلق", "adm_approvals"),
     )
-    builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"))
+    builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"), _btn("📖 وقایع‌نامه", "chr:menu"))
     builder.row(_btn("⚙️ مدیریت", "adm_manage"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
     builder.row(_btn("📋 وضعیت", "adm_report"), _btn("❓ راهنما", "adm_help"))
     builder.row(_btn("🚪 خروج", "adm_logout", "danger"))

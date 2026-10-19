@@ -506,20 +506,20 @@ def run_weekly_up_for_city(city: str, force: bool = False) -> str:
     return f"✅ آپ {city}\n{log}\n♻️ ظرفیت تجارتخانه ریست شد"
 
 
-async def send_up_receipts(city: str, log: str):
-    """رسید آپ: گپ شهر + پیوی فرمانده + ادمین."""
+async def send_up_receipts(city: str, log: str, to_city: bool = True):
+    """رسید آپ: گپ شهر + پیوی فرمانده + ادمین. to_city=False → فقط ادمین‌ها (کارنامه جدا رفته)."""
     body = (
         f"🧾 <b>رسید آپ هفتگی</b>\n{DIV}\n"
         f"🏙 <b>{e(city)}</b>\n\n{log}\n\n"
         f"📜 جزئیات در منوی اقتصادی → تغییرات اخیر"
     )
     # گپ‌های ست‌شدهٔ همین شهر
-    for gid in groups_of_city(city):
+    for gid in (groups_of_city(city) if to_city else []):
         try:
             await bot.send_message(gid, body[:4000])
         except Exception:
             logging.exception("رسید آپ به گپ %s", gid)
-    for uid in player_ids_for_city(city):
+    for uid in (player_ids_for_city(city) if to_city else []):
         try:
             await bot.send_message(uid, body[:4000])
         except Exception:

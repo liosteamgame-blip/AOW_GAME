@@ -141,6 +141,20 @@ APPROVAL_BLOBS = {}
 # نظرسنجی‌های لیدر جناح: poll_id -> {key, side, leader, question, options, votes: {uid: [i]}}
 LEADER_POLLS = {}
 
+# رویدادهای عمومی کانال برای وقایع‌نامه (فقط اطلاعات عمومی؛ بدون آمار): [{ts, kind, city, ...}]
+CHRONICLE = []
+CHRONICLE_MAX = 500
+
+# آخرین رتبه هر شهر در کارنامه قبلی (برای ▲▼): city -> {"all": n, "econ": n, "mil": n, "nav": n}
+CITY_RANKS = {}
+
+# آخرین فرمان هر کاربر برای «مثل دفعه قبل»: str(uid) -> {kind: {...}}
+LAST_ORDERS = {}
+
+# کش پاسخ‌های xAI: کلید -> {"ts", "text"} (برای مصرف کمتر سهمیه)
+AI_CACHE = {}
+AI_CACHE_MAX = 60
+
 backup_state = {"mid": None}
 _backup_flags = {"dirty": False, "running": False}
 _tasks = set()

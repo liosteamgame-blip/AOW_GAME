@@ -118,6 +118,38 @@ def city_power_scores(city: str) -> dict:
     }
 
 
+RANK_CATS = ("all", "econ", "mil", "nav")
+RANK_TITLES = {"all": "🏆 کل قدرت", "econ": "💰 اقتصادی", "mil": "⚔️ نظامی", "nav": "⚓️ دریایی"}
+
+
+def city_ranks(city: str) -> dict:
+    """رتبه‌ی همین شهر در هر محور: {cat: (rank, total)}. عدد شهرهای دیگر بیرون نمی‌رود."""
+    scores = {}
+    for c in list(CITY_ASSETS.keys()):
+        sc = city_power_scores(c)
+        sc["all"] = sc["econ"] + sc["mil"] + sc["nav"]
+        scores[c] = sc
+    if city not in scores:
+        return {}
+    out = {}
+    for cat in RANK_CATS:
+        order = sorted(scores, key=lambda c: (-scores[c][cat], str(c).lower()))
+        out[cat] = (order.index(city) + 1, len(order))
+    return out
+
+
+def rank_arrow(prev, now) -> str:
+    """▲ بهتر شدن (عدد رتبه کمتر)، ▼ بدتر شدن."""
+    if not prev:
+        return "🆕"
+    diff = int(prev) - int(now)
+    if diff > 0:
+        return f"▲{fmt_num(diff)}"
+    if diff < 0:
+        return f"▼{fmt_num(-diff)}"
+    return "＝"
+
+
 def _lb_rows(scope: str, category: str):
     """لیست رتبه‌بندی‌شده [(label, flag, scores_dict), ...]"""
     if scope == "side":

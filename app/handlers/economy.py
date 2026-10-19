@@ -10,7 +10,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import ADMIN_ID, ADVISE_MODES, DIV
 from app.loader import bot, dp
-from app.state import CITY_ASSETS, GROUPS, pending_upgrades
+from app.state import CITY_ASSETS, CITY_RANKS, GROUPS, pending_upgrades
+from app.features import enabled
+from app.economy.views import RANK_CATS, RANK_TITLES, city_ranks, rank_arrow
 from app.utils import _tier_label, e, fmt_num, is_back_text, send_chunks
 from app.factions import FACTIONS, FACTION_META, cities_for_side_assets, country_key
 from app.states import GameStates
@@ -28,6 +30,7 @@ from app.players import (
 )
 from app.keyboards import _btn, get_back_keyboard, get_inline_back_row
 from app.storage import save_data
+from app.ai import ai_available, remaining_today
 from app.menus import go_menu
 from app.economy.rules import (
     AUTHORITY_TIERS,
@@ -92,6 +95,25 @@ async def handle_economy_extra(callback: types.CallbackQuery, state: FSMContext)
             "<code>ویرایش دارایی چوب -100</code>"
         )
         return await callback.message.answer(text, reply_markup=get_inline_back_row("menu:economy"))
+
+    if action == "rank":
+        if not enabled("my_rank"):
+            return await callback.message.answer("🏆 «رتبه من» فعلاً خاموش است.")
+        if not city or city == "ناشناس":
+            return await callback.message.answer("شهر شما مشخص نیست.", reply_markup=get_inline_back_row("menu:economy"))
+        ranks = city_ranks(city)
+        if not ranks:
+            return await callback.message.answer(
+                "📭 هنوز دارایی این شهر ثبت نشده؛ رتبه‌ای ندارد.", reply_markup=get_inline_back_row("menu:economy")
+            )
+        prev = CITY_RANKS.get(city) or {}
+        lines = [f"🏆 <b>رتبه {e(city)}</b>\n{DIV}"]
+        for cat in RANK_CATS:
+            r, total = ranks[cat]
+            arrow = rank_arrow(prev.get(cat), r) if prev else ""
+            lines.append(f"{RANK_TITLES[cat]}: <b>{fmt_num(r)}</b> از {fmt_num(total)} {arrow}".rstrip())
+        lines.append("\n<i>فقط رتبه‌ی شهر شما نمایش داده می‌شود؛ ▲▼ نسبت به کارنامه‌ی هفته‌ی قبل.</i>")
+        return await callback.message.answer("\n".join(lines), reply_markup=get_inline_back_row("menu:economy"))
 
     if action == "changes":
         if not city:
@@ -788,9 +810,38 @@ async def handle_advise_run(callback: types.CallbackQuery, state: FSMContext):
         text = "❌ تحلیل ناموفق بود."
     await state.set_state(GameStates.main_menu)
     if len(text) > 4000:
-        await send_chunks(callback.message, [text], reply_markup=get_inline_back_row("menu:advise"))
+        await send_chunks(callback.message, [text], reply_markup=_advice_markup(mode))
     else:
-        await callback.message.answer(text, reply_markup=get_inline_back_row("menu:advise"))
+        await callback.message.answer(text, reply_markup=_advice_markup(mode))
+
+
+def _advice_markup(mode: str):
+    """زیر تحلیل محلی: دکمه بازنگری گروک (فقط اگر کلید باشد) + بازگشت."""
+    builder = InlineKeyboardBuilder()
+    if ai_available():
+        builder.row(_btn(f"🤖 بازنگری گروک ({fmt_num(remaining_today())} باقی امروز)", f"advise_ai:{mode}", "primary"))
+    builder.row(_btn("🔙 بازگشت", "menu:advise"))
+    return builder.as_markup()
+
+
+@dp.callback_query(F.data.startswith("advise_ai:"))
+async def handle_advise_ai(callback: types.CallbackQuery, state: FSMContext):
+    """گروک فقط با همین دکمه — با کش و سقف روزانه (app/ai.py)."""
+    uid = callback.from_user.id
+    if not (is_leader(uid) or is_admin(uid) or is_player(uid)):
+        return await callback.answer("❌", show_alert=True)
+    d = await state.get_data()
+    city = d.get("advise_city")
+    mode = callback.data.split(":", 1)[1] or "balance"
+    if not city:
+        return await callback.answer("شهر مشخص نیست. دوباره از منوی مشاور.", show_alert=True)
+    await callback.answer("🤖 در حال پرسیدن از گروک…")
+    try:
+        text = await build_upgrade_advice(city, mode=mode, notes=d.get("advise_notes") or "", user_id=uid, use_ai=True)
+    except Exception:
+        logging.exception("upgrade advice ai")
+        text = "❌ تحلیل ناموفق بود."
+    await send_chunks(callback.message, [text], reply_markup=get_inline_back_row("menu:advise"))
 
 
 @dp.message(GameStates.advise_pref)
@@ -829,9 +880,9 @@ async def process_advise_pref(message: types.Message, state: FSMContext):
         text = "❌ تحلیل ناموفق بود."
     await state.set_state(GameStates.main_menu)
     if len(text) > 4000:
-        await send_chunks(message, [text], reply_markup=get_inline_back_row("menu:advise"))
+        await send_chunks(message, [text], reply_markup=_advice_markup(mode))
     else:
-        await message.answer(text, reply_markup=get_inline_back_row("menu:advise"))
+        await message.answer(text, reply_markup=_advice_markup(mode))
 
 
 @dp.callback_query(F.data.startswith("asset_view:"))

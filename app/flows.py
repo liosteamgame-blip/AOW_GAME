@@ -33,6 +33,20 @@ from app.menus import channel_failed, go_menu
 from app.economy.assets import trade_house_remaining
 from app.economy.merchants import _parse_goods_units, send_trade_reports
 from app.threats import notify_target_threat
+from app.arrivals import reschedule, schedule
+from app.chronicle import record_event
+from app.state import LAST_ORDERS
+
+
+def remember_order(user_id: int, kind: str, data: dict) -> None:
+    """برای «مثل دفعه قبل» — فقط فیلدهای فرم خود بازیکن."""
+    keep = ("origin", "dest", "target", "stats", "mtype")
+    LAST_ORDERS.setdefault(str(user_id), {})[kind] = {k: data.get(k) for k in keep if data.get(k)}
+
+
+def _origin_chat(callback: types.CallbackQuery):
+    msg = callback.message
+    return msg.chat.id if msg and msg.chat.type in ("group", "supergroup") else None
 
 
 async def _finish_campaign(callback: types.CallbackQuery, state: FSMContext, d: dict):
@@ -54,6 +68,10 @@ async def _finish_campaign(callback: types.CallbackQuery, state: FSMContext, d: 
         "owner_id": user_id, "type": "campaign", "time_created": time.time(), "msg_id": sent.message_id,
         "data": {"origin": d["origin"], "dest": d["dest"], "stats": d["stats"], "time": d["time"], "mtype": d.get("mtype")},
     }
+    schedule(action_id, d["time"], text, bool(getattr(sent, "photo", None)),
+             via="campaign", origin_chat=_origin_chat(callback), city=city)
+    record_event("campaign", city=city, origin=d["origin"], dest=d["dest"], mtype=d.get("mtype"))
+    remember_order(user_id, "campaign", d)
     save_data()
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -103,6 +121,8 @@ async def _finish_order(callback: types.CallbackQuery, state: FSMContext, d: dic
         "owner_id": user_id, "type": kind, "time_created": time.time(), "msg_id": sent.message_id,
         "data": {"target": d["target"], "stats": d["stats"], "mtype": d.get("mtype")},
     }
+    record_event(kind, city=city, target=d["target"], mtype=d.get("mtype"))
+    remember_order(user_id, kind, d)
     save_data()
     spawn(expire_cancel_button(action_id))
     try:
@@ -149,6 +169,7 @@ async def cancel_order(callback: types.CallbackQuery, prefix, kind):
 
     cfg = ORDERS[kind]
     action["cancelled"] = True
+    record_event("cancel", city=city_of(uid), target=action["data"].get("target"))
     save_data()
     try:
         await bot.edit_message_reply_markup(chat_id=CHANNEL_ID, message_id=action["msg_id"], reply_markup=None)
@@ -185,6 +206,7 @@ async def _finish_ann(callback: types.CallbackQuery, state: FSMContext, d: dict)
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
         pass
+    record_event("statement", city=city)
     await go_menu(callback.message, state, "✅ سرورم بیانیه شما با موفقیت <b>منتشر</b> شد. 📢")
     await send_report(f"📢 <b>بیانیه جدید منتشر شد</b>\n{DIV}\n👤 فرمانده: {mention(user_id, city)} (ID: <code>{user_id}</code>)\n🏙 شهر: {e(city)}")
 
@@ -389,6 +411,7 @@ async def _finish_ambush(callback: types.CallbackQuery, state: FSMContext, d: di
         )
     except Exception as ex:
         return await channel_failed(callback.message, state, ex, "پیام کمین")
+    record_event("ambush", city=attacker, defender=defender, via="campaign")
 
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -432,6 +455,7 @@ async def _finish_trade_ambush(callback: types.CallbackQuery, state: FSMContext,
         )
     except Exception as ex:
         return await channel_failed(callback.message, state, ex, "کمین کاروان")
+    record_event("ambush", city=attacker, defender=defender, via="caravan")
 
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -474,6 +498,9 @@ async def _finish_redirect(callback: types.CallbackQuery, state: FSMContext, d: 
     old_dest = action["data"].get("dest", "-")
     action["data"]["dest"] = d["new_dest"]
     action["data"]["time"] = d["new_time"]
+    # شمارش معکوس و هشدار رسیدن با مقصد/زمان جدید
+    reschedule(d.get("action_id"), d["new_time"], mode="go", dest=d["new_dest"])
+    record_event("redirect", city=city, dest=d["new_dest"])
     save_data()
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -503,6 +530,11 @@ async def _finish_back(callback: types.CallbackQuery, state: FSMContext, d: dict
     except Exception as ex:
         return await channel_failed(callback.message, state, ex, "پیام بازگشت")
 
+    # قبلاً زمان بازگشت روی اکشن ثبت نمی‌شد؛ حالا شمارش معکوس بازگشت به مبدأ
+    action["data"]["back_time"] = d["back_time"]
+    reschedule(d.get("action_id"), d["back_time"], mode="back")
+    record_event("back", city=city)
+    save_data()
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:

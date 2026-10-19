@@ -1,11 +1,9 @@
 """مشاور ارتقا (محلی + xAI)."""
-import asyncio
-import json
-import logging
 import re
 import zlib
 
-from app.config import ADVISE_MODES, DIV, UPGRADE_FORM_TEMPLATE, XAI_API_KEY, XAI_MODEL
+from app.config import ADVISE_MODES, DIV, UPGRADE_FORM_TEMPLATE, XAI_API_KEY
+from app.ai import ask as ai_ask, cache_key as ai_cache_key
 from app.utils import e, fmt_num
 from app.economy.rules import FOOD_PER, UPGRADE_TABLE, _RES_MAP, _RULES_DIGEST
 from app.economy.sheet import get_city_asset_stats, get_city_asset_text, normalize_stats_keys
@@ -484,21 +482,6 @@ def local_upgrade_advice_mode(
     )
 
 
-def _xai_post_sync(body: dict) -> dict:
-    import urllib.request
-    req = urllib.request.Request(
-        "https://api.x.ai/v1/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {XAI_API_KEY}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=55) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
 async def xai_upgrade_advice(
     city: str,
     bag: dict,
@@ -534,30 +517,16 @@ async def xai_upgrade_advice(
         prompt += f"\nدرخواست بازیکن:\n{notes[:600]}\n"
     if sheet_excerpt:
         prompt += f"\nگزیده شیت:\n{sheet_excerpt[:800]}"
-    body = {
-        "model": XAI_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Ashes of War senior upgrade planner. "
-                    "Output optimized multi-level plans and filled #فرم_ارتقا. "
-                    "Never invent costs; use provided table. Persian."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.4,
-        "max_tokens": 1200,
-    }
-    try:
-        # urllib بلاک‌کننده است — در ترد جدا اجرا می‌شود تا کل ربات تا ۵۵ ثانیه فریز نشود
-        data = await asyncio.to_thread(_xai_post_sync, body)
-        content = (data["choices"][0]["message"]["content"] or "").strip()
-        return f"🤖 <b>بازنگری Grok — {e(city)}</b> · {e(mode_fa)}\n{DIV}\n{e(content)}"
-    except Exception:
-        logging.exception("xAI upgrade advice failed")
-        return None
+    system = (
+        "Ashes of War senior upgrade planner. "
+        "Output optimized multi-level plans and filled #فرم_ارتقا. "
+        "Never invent costs; use provided table. Persian."
+    )
+    key = ai_cache_key("advise", city, mode, notes, plan_txt, stats_txt)
+    content, note = await ai_ask(key, system, prompt)
+    if not content:
+        return f"🤖 <i>{e(note)}</i>"
+    return f"🤖 <b>بازنگری Grok — {e(city)}</b> · {e(mode_fa)}\n{DIV}\n{e(content)}\n\n<i>{e(note)}</i>"
 
 
 async def build_upgrade_advice(
@@ -565,7 +534,9 @@ async def build_upgrade_advice(
     mode: str = "balance",
     notes: str = "",
     user_id: int = 0,
+    use_ai: bool = False,
 ) -> str:
+    """تحلیل محلی؛ گروک فقط وقتی use_ai=True (کاربر دکمه «بازنگری گروک» را زده)."""
     bag = normalize_stats_keys(get_city_asset_stats(city))
     sheet = get_city_asset_text(city) or ""
     seed = (zlib.crc32(((city or "") + mode).encode("utf-8")) + int(user_id or 0)) % 97
@@ -573,6 +544,8 @@ async def build_upgrade_advice(
     local = local_upgrade_advice_mode(
         city, bag, mode=mode, notes=notes, sheet=sheet, user_id=user_id,
     )
+    if not use_ai:
+        return local
     ai = await xai_upgrade_advice(city, bag, sheet, mode=mode, notes=notes, plan=plan)
     if ai:
         return f"{local}\n\n{DIV}\n{ai}"
