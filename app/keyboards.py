@@ -52,17 +52,18 @@ def get_main_menu_keyboard(user_id=None, chat_id=None):
         extra.append(_btn("🤝 اختیارات کمکی‌ها", "asst:menu"))
     if extra:
         builder.row(*extra)
-    builder.row(_btn("🔙 بستن منو", "menu:close"))
+    builder.row(_btn("📘 راهنما", "guide:show"), _btn("🔙 بستن منو", "menu:close"))
     return builder.as_markup()
 
 
 def get_pv_menu_keyboard(user_id=None):
-    """منوی پی‌وی: فقط نقش‌هایی که کار خصوصی دارند (فعلاً لیدر جناح). None = بدون دکمه."""
+    """منوی پی‌وی: پنل جناح برای لیدر + راهنما برای بازیکن. None = بدون دکمه."""
+    builder = InlineKeyboardBuilder()
     if user_id and enabled("leader_panel") and leader_side(user_id):
-        builder = InlineKeyboardBuilder()
         builder.row(_btn("🏴 پنل جناح", "ldr:menu", "primary"))
-        return builder.as_markup()
-    return None
+    if user_id and (is_player(user_id) or leader_side(user_id)):
+        builder.row(_btn("📘 راهنما", "guide:show"))
+    return builder.as_markup() if list(builder.buttons) else None
 
 
 def get_military_menu_keyboard():
@@ -263,6 +264,7 @@ def get_admin_inline_keyboard():
     builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"), _btn("📖 وقایع‌نامه", "chr:menu"))
     builder.row(_btn("🌍 رویداد جهانی", "ev:menu", "primary"), _btn("📊 داشبورد زنده", "dash:menu"))
     builder.row(_btn("🗓 آپ زمان‌بندی", "upsch:menu"), _btn("🧭 آمادگی شروع", "adm_ready", "success"))
+    builder.row(_btn("📘 راهنمای بازیکن", "adm_guide"))
     builder.row(_btn("⚙️ مدیریت", "adm_manage"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
     builder.row(_btn("📋 وضعیت", "adm_report"), _btn("❓ راهنما", "adm_help"))
     builder.row(_btn("🚪 خروج", "adm_logout", "danger"))

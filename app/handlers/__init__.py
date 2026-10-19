@@ -41,6 +41,7 @@ from app.handlers import (  # noqa: E402
     world_events,
     ops_panel,
     errors,
+    guide,
     fallback,
 )
 
@@ -75,5 +76,6 @@ __all__ = [
     "world_events",
     "ops_panel",
     "errors",
+    "guide",
     "fallback",
 ]

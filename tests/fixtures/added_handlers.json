@@ -1,7 +1,9 @@
 {
   "message": [
+    "admin_guide_save",
     "assistant_perms_cmd",
     "chronicle_cmd",
+    "guide_cmd",
     "handle_narrator_role",
     "leader_msg_draft",
     "leader_poll_draft"
@@ -13,11 +15,13 @@
     "admin_audit_undo",
     "admin_feature_toggle",
     "admin_features_menu",
+    "admin_guide_cb",
     "admin_readiness",
     "admin_roles_menu",
     "assistant_perms_cb",
     "chronicle_cb",
     "dashboard_cb",
+    "guide_btn",
     "handle_advise_ai",
     "leader_panel_router",
     "my_cities",

@@ -81,3 +81,6 @@ class GameStates(StatesGroup):
     # پنل لیدر جناح
     ldr_msg = State()
     ldr_poll = State()
+
+    # راهنمای بازیکن (ادمین)
+    guide_edit = State()

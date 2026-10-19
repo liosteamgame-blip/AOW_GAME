@@ -61,6 +61,9 @@ ADVISE_MODES = {
 
 CODE_PREFIX = "AOW"          # کد ورود هر شهر با این شروع می‌شود
 MAX_LEADERS = 5              # سقف لیدر هر ساید
+# روزهای قانونی پیش‌فرض طبق _RULES_DIGEST (weekday پایتون: دوشنبه=0 … یکشنبه=6)
+# بازی شنبه تا چهارشنبه · ارتقا سه‌شنبه/چهارشنبه · تجارت پلیر شنبه/یکشنبه · تجار دوشنبه
+RULE_DAYS = {"upgrade": "1,2", "trade": "5,6", "merchant": "0"}
 CANCEL_WINDOW = 600          # مهلت لغو محاصره/جنگ (ثانیه)
 BACKUP_NAME = "aof_data.json"
 

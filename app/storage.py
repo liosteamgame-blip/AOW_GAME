@@ -132,6 +132,7 @@ def apply_data(raw):
             "lb_intro_all", "lb_intro_econ", "lb_intro_mil", "lb_intro_nav",
             "lb_place_1", "lb_place_2", "lb_place_3", "lb_place_mid", "lb_place_low", "lb_footer",
             "lb_ranks", "lb_max",
+            "guide_commander", "guide_leader",
         ):
             if st.get(k) is not None:
                 SETTINGS[k] = str(st[k])

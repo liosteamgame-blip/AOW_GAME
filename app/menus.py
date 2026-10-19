@@ -15,6 +15,7 @@ from app.players import player_group_access
 from app.gametime import game_time_status
 from app.keyboards import _btn, get_back_keyboard, get_main_menu_keyboard, get_pv_menu_keyboard, get_type_keyboard
 from app.channel import send_report
+from app.guide import guide_text, mark_seen, should_auto_show
 
 
 def build_menu_text(uid, message) -> str:
@@ -44,6 +45,13 @@ async def go_menu(message: types.Message, state: FSMContext, text=MENU_TEXT, use
     if uid:
         pending_confirms.pop(uid, None)
     await state.clear()
+    # راهنما: یک‌بار، اولین باری که فرمانده منو را باز می‌کند
+    if should_auto_show(uid):
+        mark_seen(uid)
+        try:
+            await message.answer(guide_text(uid))
+        except Exception:
+            pass
     if message.chat.type == "private":
         pv_markup = get_pv_menu_keyboard(uid)
         await message.answer(

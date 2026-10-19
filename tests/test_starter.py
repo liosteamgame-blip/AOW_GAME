@@ -6,7 +6,7 @@ from tests.fakebot import setup_env
 
 setup_env()
 
-from tests.fakebot import ADMIN, FakeTelegram, callback  # noqa: E402
+from tests.fakebot import ADMIN, FakeTelegram, callback, message  # noqa: E402
 
 import app.handlers  # noqa: E402,F401
 from app import state  # noqa: E402
@@ -72,6 +72,54 @@ class ReadinessTests(Base):
         await self.send(callback(PLAYER, "adm_ready", **self.g))
         self.assertTrue(any("⛔️" in a for a in self.alerts()))
         self.assertFalse(self.tg.sent("SendMessage"))
+
+
+class GuideTests(Base):
+    async def asyncTearDown(self):
+        state.SETTINGS["guide_commander"] = ""
+        state.SETTINGS["guide_leader"] = ""
+
+    async def test_auto_once_on_first_menu(self):
+        await self.send(message(PLAYER, "/start", **self.g))
+        guides = [t for t in self.tg.texts() if "راهنمای" in t]
+        self.assertEqual(len(guides), 1, self.tg.texts())
+        self.assertTrue(state.authenticated_users[PLAYER].get("guide_seen"))
+        self.assertIn("guide:show", self.tg.buttons())
+        self.tg.clear()
+        await self.send(message(PLAYER, "/start", **self.g))
+        self.assertFalse([t for t in self.tg.texts() if "راهنمای" in t], "فقط یک‌بار خودکار")
+
+    async def test_command_texts_short_rule_based_no_secrets(self):
+        state.CITY_ASSETS[LONDON]["stats"].update({"سکه": 987654, "شبه نظامی": 4321})
+        await self.send(message(PLAYER, "راهنما", **self.g))
+        cmd = self.tg.last_text()
+        self.assertIn("راهنمای 👑 فرمانده", cmd)
+        self.assertIn("سه‌شنبه، چهارشنبه", cmd)        # ارتقا طبق قوانین
+        self.assertIn("شنبه، یکشنبه", cmd)               # تجارت پلیر
+        self.assertIn("دوشنبه", cmd)                      # تجار
+        self.assertLessEqual(len(cmd.splitlines()), 15)
+        for secret in ("987,654", "987654", "4321", "4,321", LONDON):
+            self.assertNotIn(secret, cmd)
+        state.LEADERS["monarchist"] = [LEADER]
+        await self.send(message(LEADER, "راهنما"))
+        ldr = self.tg.last_text()
+        self.assertIn("راهنمای 🏴 لیدر جناح", ldr)
+        self.assertIn("پنل جناح", ldr)
+        self.assertLessEqual(len(ldr.splitlines()), 15)
+
+    async def test_admin_edits_text_and_it_survives_restart(self):
+        await self.send(callback(ADMIN, "adm_guide:edit:commander"))
+        await self.send(message(ADMIN, "\n".join(f"خط {i}" for i in range(20))))
+        self.assertIn("حداکثر", self.tg.last_text())
+        await self.send(message(ADMIN, "سرورم، فقط در روزهای بازی فرمان بدهید.\nموفق باشید."))
+        self.assertEqual(state.SETTINGS["guide_commander"], "سرورم، فقط در روزهای بازی فرمان بدهید.\nموفق باشید.")
+        apply_data(json.loads(json.dumps(snapshot(), ensure_ascii=False, default=str)))   # ری‌استارت
+        self.assertEqual(state.SETTINGS["guide_commander"], "سرورم، فقط در روزهای بازی فرمان بدهید.\nموفق باشید.")
+        self.tg.clear()
+        await self.send(message(PLAYER, "راهنما", **self.g))
+        self.assertIn("موفق باشید", self.tg.last_text())
+        await self.send(callback(ADMIN, "adm_guide:reset:commander"))
+        self.assertEqual(state.SETTINGS["guide_commander"], "")
 
 
 if __name__ == "__main__":

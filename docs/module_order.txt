@@ -16,6 +16,7 @@ app.permissions
 app.gametime
 app.keyboards
 app.storage
+app.guide
 app.art
 app.channel
 app.menus
@@ -68,6 +69,7 @@ app.handlers.quick_order
 app.handlers.world_events
 app.handlers.ops_panel
 app.handlers.errors
+app.handlers.guide
 app.handlers.fallback
 app.scheduler
 app.bootstrap
