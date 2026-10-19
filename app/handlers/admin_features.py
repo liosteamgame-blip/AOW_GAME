@@ -13,8 +13,9 @@ from app.permissions import ROLE_TITLES, can, grant_role, revoke_role
 from app.players import is_admin, mention
 from app.state import AUDIT_LOG, EXTRA_ROLES, LEADERS, PENDING_APPROVALS, authenticated_users
 from app.storage import save_data
-from app.utils import e, fmt_num, norm_cmd, send_chunks
+from app.utils import _DAY_FA, e, fmt_num, norm_cmd, send_chunks
 from app.readiness import build_report as build_readiness
+from app.rulecal import KINDS as CAL_KINDS, MODE_TITLES, allowed_days as cal_days, days_text as cal_days_text, mode as cal_mode
 
 AUDIT_PAGE = 10
 
@@ -29,10 +30,56 @@ def features_view(uid: int):
         lines.append(f"{'✅' if on else '❌'} <b>{title}</b>\n   <i>{e(desc)}</i>")
         if owner:
             builder.row(_btn(f"{'✅' if on else '❌'} {title}", f"feat:tog:{key}", "success" if on else "danger"))
+    lines.append(f"📅 <b>تقویم قوانین</b>: {MODE_TITLES[cal_mode()]}\n   <i>ارتقا/تجارت/تجار فقط در روزهای قانونی</i>")
+    if owner:
+        builder.row(_btn(f"📅 تقویم قوانین: {MODE_TITLES[cal_mode()]}", "feat:cal", "primary"))
     if not owner:
         lines.append("\n<i>فقط مالک می‌تواند فیچرها را روشن/خاموش کند.</i>")
     builder.row(_btn("🔙 پنل", "back_to_admin"))
     return "\n".join(lines), builder.as_markup()
+
+
+def calendar_view():
+    lines = [
+        f"📅 <b>تقویم قوانین</b>\n{DIV}",
+        f"حالت: <b>{MODE_TITLES[cal_mode()]}</b>",
+        "• <b>هشدار</b>: فقط پیام/گزارش ادمین برچسب «⚠️ خارج از روز مجاز» می‌گیرد؛ به بازیکن چیزی گفته نمی‌شود.",
+        "• <b>مسدود</b>: بازیکن پیام مؤدبانه با روز مجاز بعدی می‌گیرد (ادمین مستثناست).\n",
+    ]
+    b = InlineKeyboardBuilder()
+    b.row(*[_btn(("✅ " if cal_mode() == m else "") + t, f"feat:calmode:{m}") for m, t in MODE_TITLES.items()])
+    week = (5, 6, 0, 1, 2, 3, 4)   # شنبه … جمعه
+    for kind, title in CAL_KINDS.items():
+        days = cal_days(kind) or set()
+        lines.append(f"{title}: <b>{e(cal_days_text(kind))}</b>")
+        b.row(_btn(title, "noop"))
+        b.row(*[_btn(("✅" if d in days else "▫️") + _DAY_FA[d][:2], f"feat:calday:{kind}:{d}") for d in week])
+    b.row(_btn("🔙 فیچرها", "adm_features"))
+    return "\n".join(lines), b.as_markup()
+
+
+@dp.callback_query(F.data.startswith("feat:cal"))
+async def admin_calendar(callback: types.CallbackQuery):
+    if not can(callback.from_user.id, "features.manage"):
+        return await callback.answer("⛔️ فقط مالک.", show_alert=True)
+    parts = callback.data.split(":")
+    if parts[1] == "calmode" and len(parts) > 2 and parts[2] in MODE_TITLES:
+        app_state.SETTINGS["rules_calendar"] = parts[2]
+        save_data(critical=True)
+    elif parts[1] == "calday" and len(parts) > 3 and parts[2] in CAL_KINDS and parts[3].isdigit():
+        days = set(cal_days(parts[2]) or set())
+        d = int(parts[3])
+        days.symmetric_difference_update({d})
+        if not days:
+            return await callback.answer("حداقل یک روز باید مجاز بماند.", show_alert=True)
+        app_state.SETTINGS[f"days_{parts[2]}"] = ",".join(str(x) for x in sorted(days))
+        save_data(critical=True)
+    await callback.answer()
+    text, kb = calendar_view()
+    try:
+        await callback.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb)
 
 
 @dp.callback_query(F.data == "adm_features")

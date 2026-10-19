@@ -13,7 +13,7 @@ from app.loader import bot, dp
 from app.state import CITY_ASSETS, CITY_RANKS, GROUPS, pending_upgrades
 from app.features import enabled
 from app.economy.views import RANK_CATS, RANK_TITLES, city_ranks, rank_arrow
-from app.utils import _tier_label, e, fmt_num, is_back_text, send_chunks
+from app.utils import _tier_label, e, fmt_num, is_back_text, plain, send_chunks
 from app.factions import FACTIONS, FACTION_META, cities_for_side_assets, country_key
 from app.states import GameStates
 from app.players import (
@@ -31,6 +31,7 @@ from app.players import (
 from app.keyboards import _btn, get_back_keyboard, get_inline_back_row
 from app.storage import save_data
 from app.ai import ai_available, remaining_today
+from app.rulecal import admin_tag, block_message
 from app.menus import go_menu
 from app.economy.rules import (
     AUTHORITY_TIERS,
@@ -438,6 +439,9 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
         return
 
     if action == "do" and len(parts) >= 5:
+        blocked = block_message("upgrade", uid)
+        if blocked:   # تقویم قوانین در حالت «مسدود»
+            return await callback.answer(plain(blocked)[:200], show_alert=True)
         # مرحله ۱: فقط پیش‌نویس + دکمه تایید (چیزی کسر نمی‌شود)
         sec, idx_s, lv_s = parts[2], parts[3], parts[4]
         meta = UPGRADE_SECTIONS.get(sec)
@@ -497,6 +501,10 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
                 "❌ سرورم، فرمان ارتقا لغو شد.", reply_markup=get_inline_back_row("menu:upgrade")
             )
         city, name, levels = pend["city"], pend["name"], pend["levels"]
+        blocked = block_message("upgrade", uid)
+        if blocked:   # پیش‌نویس قبل از نیمه‌شب، تایید در روز غیرمجاز
+            await callback.answer()
+            return await callback.message.answer(blocked, reply_markup=get_inline_back_row("menu:upgrade"))
         ok, msg = apply_upgrade_levels(city, name, levels, force=is_admin(uid))
         if ok:
             await callback.answer("✅ اعمال شد")
@@ -510,7 +518,7 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
             try:
                 await bot.send_message(
                     ADMIN_ID,
-                    f"⬆️ ارتقا اتو\n🏙 {e(city)}\n👤 {mention(uid, city)}\n{msg[:800]}",
+                    f"⬆️ ارتقا اتو\n🏙 {e(city)}\n👤 {mention(uid, city)}\n{msg[:800]}{admin_tag('upgrade')}",
                 )
             except Exception:
                 pass

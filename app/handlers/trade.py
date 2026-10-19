@@ -36,6 +36,7 @@ from app.channel import post_to_channel
 from app.menus import go_menu
 from app.economy.assets import consume_trade_house_cap, release_trade_house_cap
 from app.arrivals import schedule
+from app.rulecal import block_message
 from app.chronicle import record_event
 from app.economy.merchants import (
     apply_merchant_trade_to_city,
@@ -52,6 +53,10 @@ async def trade_kind_pick(callback: types.CallbackQuery, state: FSMContext):
     if not is_player(callback.from_user.id):
         return await callback.answer("❌ دسترسی ندارید.", show_alert=True)
     kind = callback.data.split(":")[1]
+    blocked = block_message("trade" if kind == "player" else "merchant", callback.from_user.id)
+    if blocked:   # تقویم قوانین در حالت «مسدود»
+        await callback.answer()
+        return await callback.message.answer(blocked, reply_markup=get_main_menu_keyboard(callback.from_user.id))
     await callback.answer()
     if kind == "player":
         try:

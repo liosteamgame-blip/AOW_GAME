@@ -3,6 +3,7 @@
 همه در SETTINGS ذخیره می‌شوند و از پنل ادمین («🧪 فیچرها») قابل تغییرند — بدون ری‌استارت.
 هر فیچر جدید که ساخته می‌شود باید یک کلید اینجا بگیرد.
 """
+from app.config import RULE_DAYS
 from app.state import SETTINGS
 
 # key -> (عنوان، پیش‌فرض، توضیح کوتاه)
@@ -59,6 +60,11 @@ EXTRA_SETTINGS = {
     "up_preview_sent": "",
     "up_last_run": "",
     "up_skip_notified": "",
+    # تقویم قوانین: off | warn | block (پیش‌فرض خاموش) + روزهای مجاز هر درخواست
+    "rules_calendar": "off",
+    "days_upgrade": RULE_DAYS["upgrade"],
+    "days_trade": RULE_DAYS["trade"],
+    "days_merchant": RULE_DAYS["merchant"],
 }
 
 

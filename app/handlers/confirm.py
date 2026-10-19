@@ -9,6 +9,7 @@ from app.state import pending_confirms
 from app.utils import e
 from app.states import GameStates
 from app.permissions import assistant_block_text
+from app.rulecal import block_message
 from app.gametime import MILITARY_KINDS, military_closed_text
 from app.menus import go_menu
 from app.flows import (
@@ -126,6 +127,15 @@ async def _process_universal_confirm(callback: types.CallbackQuery, state: FSMCo
         except Exception:
             pass
         return await go_menu(callback.message, state, e(blocked))
+
+    cal_kind = {"trade": "trade", "mtrade": "merchant"}.get(kind)
+    blocked = block_message(cal_kind, callback.from_user.id) if cal_kind else ""
+    if blocked:   # تقویم قوانین در حالت «مسدود» (فرم قبل از نیمه‌شب شروع شده)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return await go_menu(callback.message, state, blocked)
 
     if kind in MILITARY_KINDS:
         closed = military_closed_text(callback.from_user.id)

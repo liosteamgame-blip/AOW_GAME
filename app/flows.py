@@ -35,6 +35,7 @@ from app.economy.merchants import _parse_goods_units, send_trade_reports
 from app.threats import notify_target_threat
 from app.arrivals import reschedule, schedule
 from app.chronicle import record_event
+from app.rulecal import admin_tag
 from app.state import LAST_ORDERS
 
 
@@ -258,6 +259,7 @@ async def _finish_mtrade(callback: types.CallbackQuery, state: FSMContext, d: di
         f"📦 درخواست:\n{format_goods(order)}\n\n"
         f"📦 پس از باف:\n{format_goods(after)}\n\n"
         "پس از ✅ تأیید، سکه و کالا روی دارایی شهر اعمال می‌شود."
+        + admin_tag("merchant")
     )
     await send_trade_reports(full, full)
     # دکمه‌های تأیید برای ادمین اصلی
@@ -332,6 +334,7 @@ async def _finish_trade(callback: types.CallbackQuery, state: FSMContext, d: dic
         f"📦 ارسالی:\n<blockquote>{e(d.get('send', '-'))}</blockquote>\n"
         f"📦 دریافتی:\n<blockquote>{e(d.get('recv', '-'))}</blockquote>\n\n"
         "با ✅ تأیید → پست کانال + کسر ظرفیت تجارتخانه"
+        + admin_tag("trade")
     )
     builder = InlineKeyboardBuilder()
     builder.row(

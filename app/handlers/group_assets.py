@@ -9,6 +9,7 @@ from app.config import ADMIN_ID, DIV
 from app.loader import bot, dp
 from app.state import GROUPS, all_players, authenticated_users, pending_confirms
 from app.utils import e, is_back_text, norm_cmd, send_chunks
+from app.rulecal import admin_tag, block_message
 from app.factions import _canonical_city_name, country_key
 from app.states import GameStates
 from app.players import (
@@ -84,6 +85,9 @@ async def handle_apply_upgrade_cmd(message: types.Message):
         return await message.answer(
             f"🔒 اتو برای <b>{e(city)}</b> فعال نیست. ادمین باید تیک بزند."
         )
+    blocked = block_message("upgrade", uid)
+    if blocked:
+        return await message.answer(blocked)
     body = re.sub(r"(?i)^\s*اعمال\s*ارتقا\s*:?\s*", "", message.text or "").strip()
     if not body:
         return await message.answer(
@@ -116,7 +120,7 @@ async def handle_apply_upgrade_cmd(message: types.Message):
     try:
         await bot.send_message(
             ADMIN_ID,
-            f"📝 ارتقا اتو توسط {mention(uid, city)}\n🏙 {e(city)}\n" + "\n".join(results)[:1500],
+            f"📝 ارتقا اتو توسط {mention(uid, city)}\n🏙 {e(city)}\n" + "\n".join(results)[:1500] + admin_tag("upgrade"),
         )
     except Exception:
         pass
