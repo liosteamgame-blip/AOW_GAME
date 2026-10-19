@@ -6,6 +6,7 @@
     from tests.fakebot import setup_env; setup_env()   # قبل از import app
     from tests.fakebot import FakeTelegram
 """
+import asyncio
 import itertools
 import os
 import tempfile
@@ -45,6 +46,8 @@ class FakeTelegram:
 
         class _Session(BaseSession):
             async def make_request(self, bot, method, timeout=None):
+                # مثل شبکه‌ی واقعی کنترل را به event loop برگردان تا رقابت دابل‌کلیک قابل تست باشد
+                await asyncio.sleep(0)
                 outer.calls.append(method)
                 return outer._result(method)
 
