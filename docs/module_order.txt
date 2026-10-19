@@ -37,6 +37,7 @@ app.flows
 app.approvals
 app.upschedule
 app.dashboard
+app.readiness
 app.handlers.alerts
 app.handlers.start
 app.handlers.groups

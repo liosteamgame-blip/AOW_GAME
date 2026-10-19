@@ -13,6 +13,7 @@
     "admin_audit_undo",
     "admin_feature_toggle",
     "admin_features_menu",
+    "admin_readiness",
     "admin_roles_menu",
     "assistant_perms_cb",
     "chronicle_cb",

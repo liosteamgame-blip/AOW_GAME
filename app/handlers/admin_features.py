@@ -13,7 +13,8 @@ from app.permissions import ROLE_TITLES, can, grant_role, revoke_role
 from app.players import is_admin, mention
 from app.state import AUDIT_LOG, EXTRA_ROLES, LEADERS, PENDING_APPROVALS, authenticated_users
 from app.storage import save_data
-from app.utils import e, fmt_num, norm_cmd
+from app.utils import e, fmt_num, norm_cmd, send_chunks
+from app.readiness import build_report as build_readiness
 
 AUDIT_PAGE = 10
 
@@ -266,3 +267,14 @@ async def admin_approval_decide(callback: types.CallbackQuery):
             await bot.send_message(requester, f"🔐 پاسخ مالک به درخواست شما:\n{result}")
         except Exception:
             pass
+
+
+# ---------------- 🧭 چک‌لیست آمادگی شروع (فقط خواندنی) ----------------
+@dp.callback_query(F.data == "adm_ready")
+async def admin_readiness(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return await callback.answer()
+    await callback.answer()
+    builder = InlineKeyboardBuilder()
+    builder.row(_btn("🔄 تازه‌سازی", "adm_ready"), _btn("🔙 پنل", "back_to_admin"))
+    await send_chunks(callback.message, build_readiness().split("\n"), reply_markup=builder.as_markup())

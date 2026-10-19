@@ -262,7 +262,7 @@ def get_admin_inline_keyboard():
     )
     builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"), _btn("📖 وقایع‌نامه", "chr:menu"))
     builder.row(_btn("🌍 رویداد جهانی", "ev:menu", "primary"), _btn("📊 داشبورد زنده", "dash:menu"))
-    builder.row(_btn("🗓 آپ زمان‌بندی", "upsch:menu"))
+    builder.row(_btn("🗓 آپ زمان‌بندی", "upsch:menu"), _btn("🧭 آمادگی شروع", "adm_ready", "success"))
     builder.row(_btn("⚙️ مدیریت", "adm_manage"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
     builder.row(_btn("📋 وضعیت", "adm_report"), _btn("❓ راهنما", "adm_help"))
     builder.row(_btn("🚪 خروج", "adm_logout", "danger"))
