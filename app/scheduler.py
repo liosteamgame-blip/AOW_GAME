@@ -11,6 +11,8 @@ from app.gametime import is_game_day_open
 from app.storage import push_backup
 from app.channel import _broadcast_timing_to_groups
 from app.arrivals import tick as arrivals_tick
+from app.dashboard import REFRESH_SECONDS as DASH_REFRESH, refresh as dashboard_refresh
+from app.upschedule import tick as up_schedule_tick
 
 
 # آخرین تاریخ ارسال خودکار استارت/استاپ (YYYY-MM-DD) تا دوبار نفرستد
@@ -77,4 +79,24 @@ async def arrivals_loop():
             await arrivals_tick()
         except Exception:
             logging.exception("arrivals_loop")
+        await asyncio.sleep(30)
+
+
+async def dashboard_loop():
+    """هر ۵ دقیقه داشبورد زنده‌ی پین‌شده را به‌روز می‌کند (اگر نصب و روشن باشد)."""
+    while True:
+        await asyncio.sleep(DASH_REFRESH)
+        try:
+            await dashboard_refresh()
+        except Exception:
+            logging.exception("dashboard_loop")
+
+
+async def up_schedule_loop():
+    """هر ۳۰ ثانیه: پیش‌نمایش/اجرای آپ زمان‌بندی‌شده (فقط با تایید ادمین)."""
+    while True:
+        try:
+            await up_schedule_tick()
+        except Exception:
+            logging.exception("up_schedule_loop")
         await asyncio.sleep(30)

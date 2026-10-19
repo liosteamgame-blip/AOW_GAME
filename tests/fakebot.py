@@ -28,6 +28,7 @@ def setup_env():
     os.environ["DATA_FILE"] = os.path.join(_TMP, "data.json")
     os.environ.pop("XAI_API_KEY", None)
     os.environ.pop("GROK_API_KEY", None)
+    os.environ["AOW_RAISE_ERRORS"] = "1"   # هندلر خطا در تست، خطا را پنهان نکند
     return _TMP
 
 

@@ -20,9 +20,9 @@ from app.economy.assets import is_auto_city
 from app.economy.up import (
     restore_city_up,
     run_weekly_up_for_city,
-    snapshot_all_assets,
 )
 from app.economy.reportcard import send_up_result
+from app.economy.upflow import run_up_all, up_all_running
 
 
 @dp.callback_query(F.data == "adm_auto")
@@ -104,40 +104,17 @@ async def admin_run_up_menu(callback: types.CallbackQuery):
 async def admin_up_all(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         return await callback.answer()
+    if up_all_running():
+        return await callback.answer("⏳ آپ کلی در حال اجراست؛ دوباره نزنید.", show_alert=True)
     await callback.answer("آپ کلی…")
-    n_snap = snapshot_all_assets(reason="up_all")
-    save_data(critical=True)
-    results = []
-    done = []
-    for city in list(AUTO_CITIES.keys()):
-        if not AUTO_CITIES.get(city):
-            continue
-        log = run_weekly_up_for_city(city, force=False)
-        results.append(log)
-        done.append((city, log))
-    # کارنامه/رسید بعد از آپ همه شهرها — تا رتبه‌ها با وضعیت نهایی مقایسه شوند
-    for city, log in done:
-        try:
-            await send_up_result(city, log)
-        except Exception:
-            logging.exception("رسید آپ %s", city)
-    if not results:
-        return await callback.message.answer(
-            "📭 هیچ شهر اتویی فعال نیست.\nاز «شهرهای اتو» فعال کنید یا آپ تکی بزنید.",
-            reply_markup=get_admin_inline_keyboard(),
-        )
-    save_data(critical=True)
     try:
-        await push_backup()
+        await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
-        logging.exception("بکاپ تلگرام بعد از آپ کلی")
-    body = (
-        f"♻️ <b>نتیجه آپ کلی</b>\n"
-        f"🗄 بکاپ قبل از آپ: <b>{n_snap}</b> شهر (قدیم نگه داشته شد)\n"
-        f"✅ بکاپ جدید + تلگرام ذخیره شد\n"
-        f"{DIV}\n" + "\n".join(results[:40])
-    )
-    await callback.message.answer(body[:4000], reply_markup=get_admin_inline_keyboard())
+        pass
+    body = await run_up_all(reason="up_all")
+    if body is None:
+        return await callback.message.answer("⏳ آپ کلی همین الان در حال اجراست.")
+    await callback.message.answer(body, reply_markup=get_admin_inline_keyboard())
 
 
 @dp.callback_query(F.data == "up_pick")

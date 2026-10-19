@@ -10,6 +10,7 @@ from app.utils import e, fmt_num
 from app.players import groups_of_city, player_ids_for_city
 from app.storage import save_data
 from app.audit import audited
+from app.events import consume_event_buffs
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE, UP_YIELD_DEST
 from app.economy.sheet import (
     _annotate_yield_pct,
@@ -127,6 +128,17 @@ def snapshot_all_assets(reason: str = "manual") -> int:
 
 @audited("آپ هفتگی")
 def run_weekly_up_for_city(city: str, force: bool = False) -> str:
+    """آپ یک شهر + کم کردن شمارنده‌ی رویدادهای جهانی همان شهر (فقط وقتی آپ واقعاً انجام شد)."""
+    log = _run_weekly_up_impl(city, force=force)
+    if not str(log).startswith("⏭"):
+        ended = consume_event_buffs(city)
+        if ended:
+            save_data(critical=True)
+            log += "\n🌍 پایان رویداد: " + "، ".join(ended)
+    return log
+
+
+def _run_weekly_up_impl(city: str, force: bool = False) -> str:
     """
     آپ هفتگی — بازدهی‌ها به مقصد مشخص:
     • خزانه+بندر+تجارتخانه → جمع می‌شود و به موجودی سکه خزانه

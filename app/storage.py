@@ -35,6 +35,7 @@ from app.state import (
     SETTINGS,
     UP_HISTORY_MAX,
     UP_SNAPSHOTS,
+    WORLD_EVENTS,
     _backup_flags,
     active_actions,
     all_players,
@@ -82,6 +83,7 @@ def snapshot():
         "city_ranks": {k: dict(v) for k, v in CITY_RANKS.items()},
         "last_orders": {k: dict(v) for k, v in LAST_ORDERS.items()},
         "ai_cache": {k: dict(v) for k, v in list(AI_CACHE.items())[-30:]},
+        "world_events": {k: dict(v) for k, v in list(WORLD_EVENTS.items())[-50:]},
     }
 
 
@@ -306,7 +308,8 @@ def _apply_stage1_data(raw):
     CHRONICLE.clear()
     CHRONICLE.extend(x for x in (raw.get("chronicle") or []) if isinstance(x, dict))
     del CHRONICLE[:-CHRONICLE_MAX]
-    for target, key in ((CITY_RANKS, "city_ranks"), (LAST_ORDERS, "last_orders"), (AI_CACHE, "ai_cache")):
+    for target, key in ((CITY_RANKS, "city_ranks"), (LAST_ORDERS, "last_orders"), (AI_CACHE, "ai_cache"),
+                        (WORLD_EVENTS, "world_events")):
         target.clear()
         for k, v in (raw.get(key) or {}).items():
             if isinstance(v, dict):

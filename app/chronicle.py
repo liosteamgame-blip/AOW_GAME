@@ -26,6 +26,7 @@ SECTIONS = (
     ("caravan", "🐪 کاروان‌های تجاری"),
     ("arrival", "🏁 رسیدن‌ها"),
     ("statement", "📜 بیانیه‌ها"),
+    ("event", "🌍 رویدادهای جهانی"),
 )
 _MTYPE = {"sea": "دریایی", "land": "زمینی"}
 
@@ -81,6 +82,8 @@ def _line(ev: dict) -> str:
     if k == "arrival":
         what = "کاروان" if ev.get("via") == "caravan" else "لشکر"
         return f"{what} {c} به <b>{e(ev.get('dest') or '—')}</b> رسید."
+    if k == "event":
+        return f"{e(ev.get('via') or 'رویدادی')} سرزمین‌ها را فرا گرفت."
     if k == "statement":
         return f"{c} بیانیه‌ای رسمی صادر کرد."
     return f"{c} — {e(k)}"

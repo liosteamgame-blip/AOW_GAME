@@ -38,6 +38,9 @@ from app.handlers import (  # noqa: E402
     commander,
     chronicle_panel,
     quick_order,
+    world_events,
+    ops_panel,
+    errors,
     fallback,
 )
 
@@ -69,5 +72,8 @@ __all__ = [
     "commander",
     "chronicle_panel",
     "quick_order",
+    "world_events",
+    "ops_panel",
+    "errors",
     "fallback",
 ]

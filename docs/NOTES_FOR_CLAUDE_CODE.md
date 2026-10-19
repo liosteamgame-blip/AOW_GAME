@@ -109,3 +109,9 @@
 - **رسیدن:** اکشن جدیدی که زمان رسیدن دارد `app.arrivals.schedule(...)` بگیرد؛ تغییر زمان با `reschedule`. حلقه در `scheduler.arrivals_loop`.
 - **رتبه:** `app.economy.views.city_ranks(city)` فقط رتبه‌ی همان شهر را می‌دهد؛ عدد شهرهای دیگر را به پلیر نشان نده.
 - **کارنامه:** بعد از آپ `reportcard.send_up_result` (نه `send_up_receipts` مستقیم).
+
+## مرحله ۳ — قراردادها
+- **آپ کلی** فقط از `app.economy.upflow.run_up_all` (قفل دابل‌کلیک دارد؛ دکمه و زمان‌بند هر دو از همین).
+- **رویداد جهانی** = باف‌های `source="event"` با `ups_left` در `CITY_BUFFS`؛ `run_weekly_up_for_city` بعد از هر آپ واقعی `consume_event_buffs` را صدا می‌زند.
+- **آپ زمان‌بندی‌شده** (`app/upschedule.py`) بدون `up_confirmed_for` همان روز اجرا نمی‌شود. این قانون با تست نگهبانی می‌شود.
+- **خطاها:** `dp.errors` در `handlers/errors.py`. در تست (`AOW_RAISE_ERRORS=1` در fakebot) خطا بعد از ثبت دوباره raise می‌شود تا تست‌ها خطای هندلر را پنهان نکنند.

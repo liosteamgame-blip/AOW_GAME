@@ -155,6 +155,10 @@ LAST_ORDERS = {}
 AI_CACHE = {}
 AI_CACHE_MAX = 60
 
+# رویدادهای جهانی: eid -> {template, title, kind, target, pct, ups, scope, cities, ts, by, active}
+# اثر واقعی‌شان باف‌های source="event" داخل CITY_BUFFS است (با ups_left)
+WORLD_EVENTS = {}
+
 backup_state = {"mid": None}
 _backup_flags = {"dirty": False, "running": False}
 _tasks = set()
