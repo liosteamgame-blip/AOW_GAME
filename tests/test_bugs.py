@@ -49,6 +49,21 @@ class BugTests(Base):
         hits = [p.name for p in APP.rglob("*.py") if '"adm_back"' in p.read_text(encoding="utf-8")]
         self.assertEqual(hits, [])
 
+    async def test_bug2_up_menu_back_button_opens_panel(self):
+        await dp.feed_update(bot, callback(ADMIN, "adm_run_up"))
+        self.assertIn("back_to_admin", self.tg.buttons())
+        self.assertNotIn("adm_back", self.tg.buttons())
+        self.tg.clear()
+        await dp.feed_update(bot, callback(ADMIN, "back_to_admin"))
+        self.assertTrue(any("منوی اصلی مدیریت" in t for t in self.tg.texts()), self.tg.texts())
+
+    async def test_bug7_upgrade_screen_text_matches_confirm(self):
+        self._upgrade_city()
+        await dp.feed_update(bot, callback(ADMIN, "menu:upgrade", chat_id=GROUP, chat_type="supergroup"))
+        txt = self.tg.last_text()
+        self.assertIn("تایید ارتقا", txt)
+        self.assertNotIn("پس از تایید اعمال می‌شود", txt)
+
     async def test_bug5_owner_start_opens_panel(self):
         state.authenticated_users.pop(ADMIN, None)
         await self.send_start()
@@ -100,6 +115,20 @@ class BugTests(Base):
         self.assertEqual(len(posts), 1)
         self.assertEqual(state.CITY_ASSETS[city].get("trade_cap_used"), 10)
         self.assertEqual(state.PENDING_TRADES["t1"]["status"], "approved")
+
+    async def test_bug6_leader_capacity_alert_shows_real_cap(self):
+        state.LEADERS["france"] = [9001, 9002, 9003, 9004]
+        try:
+            await dp.feed_update(bot, callback(ADMIN, "set_leader_side:france:9005"))
+            self.assertTrue(any("(5/5)" in t for t in self.tg.texts()), self.tg.texts())
+            self.tg.clear()
+            await dp.feed_update(bot, callback(ADMIN, "set_leader_side:france:9006"))
+            alerts = [c.text for c in self.tg.sent("AnswerCallbackQuery") if getattr(c, "text", None)]
+            self.assertTrue(any("5/5" in a and "پر است" in a for a in alerts), alerts)
+            self.assertFalse(any("۳/۳" in a for a in alerts))
+            self.assertNotIn(9006, state.LEADERS["france"])
+        finally:
+            state.LEADERS["france"] = []
 
     def test_bug6_leader_capacity_text(self):
         src = (APP / "handlers" / "leaders.py").read_text(encoding="utf-8")
