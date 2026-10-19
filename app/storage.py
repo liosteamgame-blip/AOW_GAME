@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, InputMediaDocument
 
 from app import state as app_state
-from app.config import ADMIN_ID, BACKUP_CHAT_ID, BACKUP_NAME, DATA_FILE, DIV, TZ
+from app.config import ADMIN_ID, BACKUP_CHAT_ID, BACKUP_NAME, DATA_FILE, DIV, MAX_LEADERS, TZ
 from app.loader import bot
 from app.state import (
     AUTO_CITIES,
@@ -222,7 +222,7 @@ def apply_data(raw):
                 cleaned.append(int(x))
             except (TypeError, ValueError):
                 continue
-        LEADERS[key] = cleaned[:5]
+        LEADERS[key] = cleaned[:MAX_LEADERS]
     CITY_ASSETS.clear()
     for city, items in (raw.get("city_assets") or {}).items():
         if not isinstance(items, dict):

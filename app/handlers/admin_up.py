@@ -86,7 +86,7 @@ async def admin_run_up_menu(callback: types.CallbackQuery):
     builder.row(_btn("♻️ آپ کلی — همه اتو", "up_all", "success"))
     builder.row(_btn("🏙 آپ تکی — ساید سپس شهر", "up_pick", "primary"))
     builder.row(_btn("⏪ بازگردانی آپ یک شهر", "up_rollback_menu", "danger"))
-    builder.row(_btn("🔙 پنل ادمین", "adm_back"))
+    builder.row(_btn("🔙 پنل ادمین", "back_to_admin"))
     auto_n = sum(1 for v in AUTO_CITIES.values() if v)
     snap_n = len(UP_SNAPSHOTS)
     await callback.message.answer(
@@ -225,7 +225,7 @@ async def admin_up_one(callback: types.CallbackQuery):
         logging.exception("بکاپ تلگرام آپ تکی")
     builder = InlineKeyboardBuilder()
     builder.row(_btn("⏪ بازگردانی این شهر", f"up_rb:{city}", "danger"))
-    builder.row(_btn("🔙 پنل", "adm_back"))
+    builder.row(_btn("🔙 پنل", "back_to_admin"))
     await callback.message.answer(
         f"♻️ <b>آپ تکی — {e(city)}</b>\n{DIV}\n{log}\n\n🗄 بکاپ قدیم+جدید ذخیره شد",
         reply_markup=builder.as_markup(),

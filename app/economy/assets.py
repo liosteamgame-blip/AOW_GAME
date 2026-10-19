@@ -631,6 +631,15 @@ def consume_trade_house_cap(city: str, amount: float) -> tuple[bool, str]:
     return True, f"ظرفیت تجارتخانه −{int(round(amount))} (باقی: {trade_house_remaining(city)})"
 
 
+def release_trade_house_cap(city: str, amount: float) -> None:
+    """برگرداندن ظرفیت کسرشده (مثلاً وقتی پست کانال شکست خورد)."""
+    amount = int(round(abs(float(amount or 0))))
+    entry = CITY_ASSETS.get(city)
+    if not amount or entry is None:
+        return
+    entry["trade_cap_used"] = max(0, int(entry.get("trade_cap_used") or 0) - amount)
+
+
 def _city_change_log(city: str) -> list:
     entry = CITY_ASSETS.get(city) or {}
     return list(entry.get("changes") or [])[-15:]

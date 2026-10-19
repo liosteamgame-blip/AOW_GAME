@@ -34,7 +34,7 @@ from app.keyboards import (
 from app.storage import save_data
 from app.channel import post_to_channel
 from app.menus import go_menu
-from app.economy.assets import consume_trade_house_cap
+from app.economy.assets import consume_trade_house_cap, release_trade_house_cap
 from app.economy.merchants import (
     apply_merchant_trade_to_city,
     format_merchant_catalog,
@@ -213,6 +213,9 @@ async def admin_trade_approve(callback: types.CallbackQuery):
         ok_cap, cap_msg = consume_trade_house_cap(city, units)
         if not ok_cap:
             return await callback.answer(cap_msg[:180], show_alert=True)
+        # قفل قبل از اولین await: کلیک دوم status=processing می‌بیند و رد می‌شود
+        # (قبلاً دابل‌کلیک = دو پست کانال و دوبار کسر ظرفیت)
+        tr["status"] = "processing"
         mtype = tr.get("mtype") if tr.get("mtype") in ("land", "sea") else "land"
         mlabel = "زمینی" if mtype == "land" else "دریایی"
         action_id = secrets.token_hex(4)
@@ -233,6 +236,9 @@ async def admin_trade_approve(callback: types.CallbackQuery):
                 "trade", public_text, get_trade_channel_buttons(action_id), mtype, city,
             )
         except Exception as ex:
+            # پست نشد → برگرداندن وضعیت و ظرفیت تا ادمین بتواند دوباره تایید کند
+            tr["status"] = "pending"
+            release_trade_house_cap(city, units)
             return await callback.answer(f"خطای کانال: {ex}"[:180], show_alert=True)
         active_actions[action_id] = {
             "owner_id": tr.get("user_id"),

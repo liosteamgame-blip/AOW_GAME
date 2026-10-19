@@ -123,6 +123,10 @@ UP_HISTORY_MAX = 2   # تعداد نسخه‌های قدیمی‌تر از lates
 # user_id -> {"kind": "campaign"|"siege"|"war"|"ann"|..., "data": {...}, "chat_id": int}
 pending_confirms = {}
 
+# ارتقاهای منتظر تایید (موقت، ذخیره نمی‌شود): token -> {"uid", "city", "name", "levels", "ts"}
+# هر توکن فقط یک‌بار مصرف می‌شود؛ دابل‌کلیک روی «تایید ارتقا» دو بار هزینه کم نمی‌کند
+pending_upgrades = {}
+
 backup_state = {"mid": None}
 _backup_flags = {"dirty": False, "running": False}
 _tasks = set()

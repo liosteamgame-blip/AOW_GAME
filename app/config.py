@@ -60,6 +60,7 @@ ADVISE_MODES = {
 }
 
 CODE_PREFIX = "AOW"          # کد ورود هر شهر با این شروع می‌شود
+MAX_LEADERS = 5              # سقف لیدر هر ساید
 CANCEL_WINDOW = 600          # مهلت لغو محاصره/جنگ (ثانیه)
 BACKUP_NAME = "aof_data.json"
 

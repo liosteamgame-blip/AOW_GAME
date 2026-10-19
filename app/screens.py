@@ -84,7 +84,7 @@ async def start_auto_upgrade(callback: types.CallbackQuery, state: FSMContext):
     text = (
         f"⬆️ <b>ارتقا — {e(city)}</b>\n{DIV}\n"
         "بخش را انتخاب کنید، سپس ساختمان و تعداد سطح.\n"
-        "هزینه از قوانین محاسبه و پس از تایید اعمال می‌شود."
+        "هزینه از قوانین محاسبه می‌شود و فقط بعد از زدن «✅ تایید ارتقا» از خزانه کسر می‌شود."
     )
     try:
         await callback.message.edit_text(text, reply_markup=builder.as_markup())

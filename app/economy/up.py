@@ -308,6 +308,17 @@ def run_weekly_up_for_city(city: str, force: bool = False) -> str:
 
     buff_notes = list(coin_parts)
 
+    def _buff_base(target: str, dest: str) -> float:
+        """پایه‌ی درصد باف/نرف. اگر هدف یک ساختمان باشد، فقط بازدهی همان ساختمان حساب می‌شود.
+        (قبلاً باف «خزانه» از جمع سکه‌ی خزانه+بندر+تجارتخانه حساب می‌شد.)"""
+        if target in UP_YIELD_DEST:
+            default_y = float((UPGRADE_TABLE.get(target) or {}).get("yield") or 0)
+            return float(_yield_of(target, default_y) or 0)
+        base = float(deltas.get(dest) or 0)
+        if base <= 0:
+            base = float(bag.get(dest) or bag.get(target) or 0)
+        return base
+
     # باف/نرف با تیک apply_on_up — فقط روی بازدهی/آپ اثر می‌کند (ارتقا نیست)
     # هدف ساختمان → تغییر بازدهی همان بخش؛ روی شیت هم +N% ثبت می‌شود
     sheet_buff_ann = []  # (building_name, signed_pct)
@@ -326,14 +337,7 @@ def run_weekly_up_for_city(city: str, force: bool = False) -> str:
         if dest is None:
             # هدف مستقیم منبع یا یونیت
             dest = target
-        # پایه: بازدهی این آپ از deltas یا از _yield_of
-        base = float(deltas.get(dest) or 0)
-        if base <= 0 and target in UP_YIELD_DEST:
-            base = _yield_of(target, 0)
-            if base > 0:
-                deltas[dest] = deltas.get(dest, 0) + base
-        if base <= 0:
-            base = float(bag.get(dest) or bag.get(target) or 0)
+        base = _buff_base(target, dest)
         if base <= 0 and target not in ("اقتدار", "مشروعیت"):
             buff_notes.append(f"{kind} {target} {fmt_num(pct)}% (پایه۰)")
             continue
@@ -393,9 +397,7 @@ def run_weekly_up_for_city(city: str, force: bool = False) -> str:
             continue
         sign = -1 if kind == "nerf" else 1
         dest = UP_YIELD_DEST.get(target, target)
-        base = float(deltas.get(dest) or 0)
-        if base <= 0:
-            base = float(bag.get(dest) or bag.get(target) or 0)
+        base = _buff_base(target, dest)
         if base <= 0:
             continue
         delta = base * (abs(pct) / 100.0) * sign

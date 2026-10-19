@@ -1,6 +1,8 @@
 """هندلرهای economy"""
 import logging
 import re
+import secrets
+import time
 
 from aiogram import F, types
 from aiogram.fsm.context import FSMContext
@@ -8,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import ADMIN_ID, ADVISE_MODES, DIV
 from app.loader import bot, dp
-from app.state import CITY_ASSETS, GROUPS
+from app.state import CITY_ASSETS, GROUPS, pending_upgrades
 from app.utils import _tier_label, e, fmt_num, is_back_text, send_chunks
 from app.factions import FACTIONS, FACTION_META, cities_for_side_assets, country_key
 from app.states import GameStates
@@ -328,6 +330,9 @@ async def handle_unlock_do(callback: types.CallbackQuery, state: FSMContext):
     )
 
 
+UPGRADE_CONFIRM_TTL = 600  # ثانیه
+
+
 @dp.callback_query(F.data.startswith("upg:"))
 async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
     uid = callback.from_user.id
@@ -411,6 +416,7 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
         return
 
     if action == "do" and len(parts) >= 5:
+        # مرحله ۱: فقط پیش‌نویس + دکمه تایید (چیزی کسر نمی‌شود)
         sec, idx_s, lv_s = parts[2], parts[3], parts[4]
         meta = UPGRADE_SECTIONS.get(sec)
         if not meta:
@@ -421,6 +427,54 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
             levels = int(lv_s)
         except (ValueError, IndexError):
             return await callback.answer("نامعتبر", show_alert=True)
+        await callback.answer()
+        now = time.time()
+        for k in [k for k, v in pending_upgrades.items() if now - v["ts"] > UPGRADE_CONFIRM_TTL]:
+            pending_upgrades.pop(k, None)
+        token = secrets.token_hex(4)
+        pending_upgrades[token] = {"uid": uid, "city": city, "name": name, "levels": levels, "ts": now}
+        bag = normalize_stats_keys(get_city_asset_stats(city))
+        cur = guess_current_level(name, bag, get_city_asset_text(city) or "")
+        cur_s = fmt_num(cur) if cur is not None else "?"
+        to_s = fmt_num(cur + levels) if cur is not None else f"?+{levels}"
+        cost = format_cost_dict(cost_for_levels(name, levels, city=city))
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            _btn("✅ تایید ارتقا", f"upg:ok:{token}", "success"),
+            _btn("❌ انصراف", f"upg:no:{token}", "danger"),
+        )
+        text = (
+            f"⬆️ <b>پیش‌نویس فرمان ارتقا</b>\n{DIV}\n"
+            f"🏙 شهر: <b>{e(city)}</b>\n"
+            f"🏢 ساختمان: <b>{e(name)}</b>\n"
+            f"🔹 لول: <b>{cur_s}</b> → <b>{to_s}</b> (+{fmt_num(levels)})\n"
+            f"🧮 هزینه: <code>{e(cost)}</code>\n\n"
+            "سرورم، هزینه پس از تایید از خزانه کسر می‌شود. تایید می‌کنید؟"
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=builder.as_markup())
+        except Exception:
+            await callback.message.answer(text, reply_markup=builder.as_markup())
+        return
+
+    if action in ("ok", "no") and len(parts) >= 3:
+        # مرحله ۲: توکن قبل از هر await برداشته می‌شود → کلیک دوم چیزی پیدا نمی‌کند
+        pend = pending_upgrades.pop(parts[2], None)
+        if not pend or pend["uid"] != uid or time.time() - pend["ts"] > UPGRADE_CONFIRM_TTL:
+            if pend and pend["uid"] != uid:
+                pending_upgrades[parts[2]] = pend  # مال کس دیگری است؛ دست نزن
+                return await callback.answer("❌ این فرمان مال شما نیست.", show_alert=True)
+            return await callback.answer("این فرمان قبلاً انجام یا منقضی شده است.", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        if action == "no":
+            await callback.answer("لغو شد")
+            return await callback.message.answer(
+                "❌ سرورم، فرمان ارتقا لغو شد.", reply_markup=get_inline_back_row("menu:upgrade")
+            )
+        city, name, levels = pend["city"], pend["name"], pend["levels"]
         ok, msg = apply_upgrade_levels(city, name, levels, force=is_admin(uid))
         if ok:
             await callback.answer("✅ اعمال شد")

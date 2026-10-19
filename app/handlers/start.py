@@ -29,6 +29,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id
     user_data = authenticated_users.get(user_id)
+    if not user_data and is_admin(user_id):
+        # مالک (ADMIN_ID) رکورد ندارد ولی ادمین است — کد ورود نخواهد، مستقیم پنل
+        return await message.answer("⚡️ سلام رئیس! به پنل مدیریت شیشه‌ای خوش آمدید.", reply_markup=get_admin_inline_keyboard())
     if user_data:
         if user_data["role"] == "admin":
             await message.answer("⚡️ سلام رئیس! به پنل مدیریت شیشه‌ای خوش آمدید.", reply_markup=get_admin_inline_keyboard())

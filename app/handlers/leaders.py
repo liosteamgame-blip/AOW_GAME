@@ -3,6 +3,8 @@
 from aiogram import F, types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.config import MAX_LEADERS
+from app.utils import fmt_num
 from app.loader import bot, dp
 from app.state import LEADERS
 from app.factions import FACTIONS, FACTION_META, _parse_leader_cmd
@@ -53,14 +55,14 @@ async def handle_set_leader(message: types.Message):
     ids = LEADERS.setdefault(side, [])
     if target.id in ids:
         return await message.answer(f"ℹ️ از قبل لیدر {FACTION_META[side][1]} است.")
-    if len(ids) >= 5:
-        return await message.answer(f"❌ ظرفیت لیدر {FACTION_META[side][1]} پر است (حداکثر ۵ نفر).")
+    if len(ids) >= MAX_LEADERS:
+        return await message.answer(f"❌ ظرفیت لیدر {FACTION_META[side][1]} پر است (حداکثر {fmt_num(MAX_LEADERS)} نفر).")
     ids.append(target.id)
     save_data(critical=True)
     flag, title = FACTION_META[side]
     await message.answer(
         f"✅ {mention(target.id, target.full_name)} لیدر {flag}<b>{title}</b> شد "
-        f"({len(ids)}/5).\nمشاهده دارایی از منوی اصلی در دسترس است."
+        f"({fmt_num(len(ids))}/{fmt_num(MAX_LEADERS)}).\nمشاهده دارایی از منوی اصلی در دسترس است."
     )
     try:
         await bot.send_message(
@@ -88,14 +90,14 @@ async def handle_set_leader_side_btn(callback: types.CallbackQuery):
     ids = LEADERS.setdefault(side, [])
     if uid in ids:
         return await callback.answer("از قبل لیدر است.", show_alert=True)
-    if len(ids) >= 5:
-        return await callback.answer("ظرفیت پر است (۳/۳).", show_alert=True)
+    if len(ids) >= MAX_LEADERS:
+        return await callback.answer(f"ظرفیت لیدر این ساید پر است ({fmt_num(len(ids))}/{fmt_num(MAX_LEADERS)}).", show_alert=True)
     ids.append(uid)
     save_data(critical=True)
     flag, title = FACTION_META[side]
     await callback.answer("ثبت شد")
     await callback.message.answer(
-        f"✅ کاربر <code>{uid}</code> لیدر {flag}<b>{title}</b> شد ({len(ids)}/5)."
+        f"✅ کاربر <code>{uid}</code> لیدر {flag}<b>{title}</b> شد ({fmt_num(len(ids))}/{fmt_num(MAX_LEADERS)})."
     )
     try:
         await bot.send_message(
