@@ -1,5 +1,4 @@
 """هندلرهای admin_up"""
-import logging
 import re
 import secrets
 
@@ -15,14 +14,10 @@ from app.factions import FACTION_META, all_known_cities, country_key
 from app.states import GameStates
 from app.players import is_admin
 from app.keyboards import _btn, get_admin_inline_keyboard, get_back_keyboard
-from app.storage import push_backup, save_data
+from app.storage import save_data
 from app.economy.assets import is_auto_city
-from app.economy.up import (
-    restore_city_up,
-    run_weekly_up_for_city,
-)
-from app.economy.reportcard import send_up_result
-from app.economy.upflow import run_up_all, up_all_running
+from app.economy.up import restore_city_up
+from app.economy.upflow import run_up_all, run_up_one, up_all_running, up_one_running
 
 
 @dp.callback_query(F.data == "adm_auto")
@@ -193,17 +188,20 @@ async def admin_up_one(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         return await callback.answer()
     city = callback.data.split(":", 1)[1]
-    await callback.answer(f"آپ {city}…")
-    log = run_weekly_up_for_city(city, force=True)
+    if up_one_running(city):
+        return await callback.answer("⏳ آپ همین شهر در حال اجراست؛ دوباره نزنید.", show_alert=True)
+    # بدنه‌ی run_up_one تا اولین await خودش هم‌زمان اجرا می‌شود → قفل قبل از هر تعویض گرفته می‌شود
+    log = await run_up_one(city)
     try:
-        await send_up_result(city, log)
+        await callback.answer(f"آپ {city} انجام شد" if log else "در حال اجراست")
     except Exception:
-        logging.exception("رسید آپ %s", city)
-    save_data(critical=True)
+        pass
     try:
-        await push_backup()
+        await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
-        logging.exception("بکاپ تلگرام آپ تکی")
+        pass
+    if log is None:
+        return await callback.message.answer("⏳ آپ همین شهر یا آپ کلی همین الان در حال اجراست.")
     builder = InlineKeyboardBuilder()
     builder.row(_btn("⏪ بازگردانی این شهر", f"up_rb:{city}", "danger"))
     builder.row(_btn("🔙 پنل", "back_to_admin"))

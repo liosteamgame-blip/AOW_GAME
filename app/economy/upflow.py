@@ -12,10 +12,37 @@ from app.economy.up import run_weekly_up_for_city, snapshot_all_assets
 from app.economy.reportcard import send_up_result
 
 _running = {"on": False}
+_running_cities = set()   # آپ تکی در حال اجرا (همان الگوی قفل آپ کلی، برای هر شهر)
 
 
 def up_all_running() -> bool:
     return _running["on"]
+
+
+def up_one_running(city: str) -> bool:
+    return _running["on"] or city in _running_cities
+
+
+async def run_up_one(city: str) -> str | None:
+    """آپ تکی یک شهر (دکمه ادمین / «آپ» در گروه). None = همین شهر یا آپ کلی در حال اجراست.
+    قبلاً دابل‌کلیک روی «تأیید آپ این شهر» = دو هفته بازدهی برای آن شهر."""
+    if up_one_running(city):
+        return None
+    _running_cities.add(city)   # قبل از هر await
+    try:
+        log = run_weekly_up_for_city(city, force=True)
+        try:
+            await send_up_result(city, log)
+        except Exception:
+            logging.exception("رسید آپ %s", city)
+        save_data(critical=True)
+        try:
+            await push_backup()
+        except Exception:
+            logging.exception("بکاپ تلگرام آپ تکی")
+        return log
+    finally:
+        _running_cities.discard(city)
 
 
 async def run_up_all(reason: str = "up_all") -> str | None:

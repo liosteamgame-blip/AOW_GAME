@@ -116,6 +116,19 @@ class BugTests(Base):
         self.assertEqual(state.CITY_ASSETS[city].get("trade_cap_used"), 10)
         self.assertEqual(state.PENDING_TRADES["t1"]["status"], "approved")
 
+    async def test_up_one_double_click_runs_once(self):
+        """هم‌خانواده‌ی باگ ۳/۴: «تأیید آپ این شهر» با دابل‌کلیک دوبار بازدهی می‌داد."""
+        city = "london_monarchist"
+        state.CITY_ASSETS[city] = {"text": "", "stats": {"سکه": 0}, "yields": {"خزانه": 1000}}
+        await asyncio.gather(
+            dp.feed_update(bot, callback(ADMIN, f"up_one:{city}")),
+            dp.feed_update(bot, callback(ADMIN, f"up_one:{city}")),
+        )
+        self.assertEqual(state.CITY_ASSETS[city]["stats"]["سکه"], 1000)
+        # بعد از تمام شدن، آپ بعدی دوباره مجاز است
+        await dp.feed_update(bot, callback(ADMIN, f"up_one:{city}"))
+        self.assertEqual(state.CITY_ASSETS[city]["stats"]["سکه"], 2000)
+
     async def test_bug6_leader_capacity_alert_shows_real_cap(self):
         state.LEADERS["france"] = [9001, 9002, 9003, 9004]
         try:
