@@ -1,4 +1,4 @@
-"""📖 وقایع‌نامه: پیش‌نمایش → تایید ادمین/راوی → انتشار در کانال اصلی.
+"""📖 وقایع‌نامه: پیش‌نمایش → تایید ادمین/راوی → انتشار در کانال اصلی یا کانال توییت (قابل تنظیم).
 
 متن پیش‌فرض با قالب محلی ساخته می‌شود. «بازنویسی با گروک» فقط با دکمه است و از سهمیه‌ی روزانه
 و کش app/ai.py استفاده می‌کند. ورودی گروک فقط همان متن عمومی است.
@@ -12,21 +12,38 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.ai import ai_available, ask as ai_ask, cache_key, remaining_today
 from app.audit import record
 from app.chronicle import build_local_text, events_since
-from app.config import CHANNEL_ID, DIV
-from app.features import enabled
+from app.config import CHANNEL_ID, DIV, TWEET_CHANNEL_ID
+from app.features import enabled, setting
 from app.keyboards import _btn
 from app.loader import bot, dp
 from app.permissions import can
+from app.players import is_admin
 from app.state import SETTINGS
 from app.storage import save_data
 from app.utils import e, fmt_num, norm_cmd
 
 CHRONICLE_CMDS = {"وقایعنامه", "وقایع‌نامه", "chronicle"}
+DEST_TITLES = {"main": "📣 کانال اصلی", "tweet": "🐦 کانال توییت"}
 
 
-def _kb(has_ai: bool):
+def dest_key() -> str:
+    """مقصد انتشار؛ اگر کانال توییت تنظیم نشده باشد همیشه کانال اصلی."""
+    k = setting("chronicle_dest")
+    if k == "tweet" and TWEET_CHANNEL_ID:
+        return "tweet"
+    return "main"
+
+
+def dest_chat() -> int:
+    return TWEET_CHANNEL_ID if dest_key() == "tweet" else CHANNEL_ID
+
+
+def _kb(has_ai: bool, uid: int = 0):
     b = InlineKeyboardBuilder()
-    b.row(_btn("✅ انتشار در کانال", "chr:pub", "success"))
+    b.row(_btn(f"✅ انتشار در {DEST_TITLES[dest_key()]}", "chr:pub", "success"))
+    if is_admin(uid) and TWEET_CHANNEL_ID:
+        other = "tweet" if dest_key() == "main" else "main"
+        b.row(_btn(f"📍 تغییر مقصد به {DEST_TITLES[other]}", "chr:dest"))
     if has_ai:
         b.row(_btn(f"🤖 بازنویسی با گروک ({fmt_num(remaining_today())} باقی امروز)", "chr:ai", "primary"))
     b.row(_btn("🔄 ساخت دوباره (قالب محلی)", "chr:menu"), _btn("❌ بستن", "chr:close"))
@@ -42,9 +59,10 @@ async def _preview(target: types.Message, state: FSMContext, uid: int):
         return await target.answer("📭 از آخرین وقایع‌نامه تاکنون رویداد عمومی‌ای ثبت نشده.")
     await state.update_data(chr_text=text, chr_count=len(events), chr_until=time.time())
     await target.answer(
-        f"👁 <b>پیش‌نمایش وقایع‌نامه</b> — {fmt_num(len(events))} رویداد\n{DIV}\n<i>هنوز منتشر نشده.</i>"
+        f"👁 <b>پیش‌نمایش وقایع‌نامه</b> — {fmt_num(len(events))} رویداد\n{DIV}\n"
+        f"📍 مقصد: <b>{DEST_TITLES[dest_key()]}</b>\n<i>هنوز منتشر نشده.</i>"
     )
-    await target.answer(text, reply_markup=_kb(ai_available()))
+    await target.answer(text, reply_markup=_kb(ai_available(), uid))
 
 
 @dp.message(F.text.func(lambda t: norm_cmd(t) in CHRONICLE_CMDS))
@@ -70,6 +88,19 @@ async def chronicle_cb(callback: types.CallbackQuery, state: FSMContext):
     if action == "menu":
         await callback.answer()
         return await _preview(callback.message, state, uid)
+    if action == "dest":
+        if not is_admin(uid):
+            return await callback.answer("⛔️ فقط ادمین مقصد را عوض می‌کند.", show_alert=True)
+        if not TWEET_CHANNEL_ID:
+            return await callback.answer("کانال توییت (TWEET_CHANNEL_ID) تنظیم نشده است.", show_alert=True)
+        SETTINGS["chronicle_dest"] = "tweet" if dest_key() == "main" else "main"
+        save_data()
+        await callback.answer(f"مقصد: {DEST_TITLES[dest_key()]}")
+        try:
+            await callback.message.edit_reply_markup(reply_markup=_kb(ai_available(), uid))
+        except Exception:
+            pass
+        return
 
     d = await state.get_data()
     text = d.get("chr_text")
@@ -90,7 +121,7 @@ async def chronicle_cb(callback: types.CallbackQuery, state: FSMContext):
         new_text = f"📖 <b>وقایع‌نامه خاکستر جنگ</b>\n{DIV}\n{e(out)[:3600]}\n\n#وقایع_نامه"
         await state.update_data(chr_text=new_text)
         await callback.message.answer(f"🤖 <i>{e(note)}</i>")
-        return await callback.message.answer(new_text, reply_markup=_kb(False))
+        return await callback.message.answer(new_text, reply_markup=_kb(False, uid))
 
     if action == "pub":
         until = float(d.get("chr_until") or time.time())
@@ -100,13 +131,16 @@ async def chronicle_cb(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
+        where = DEST_TITLES[dest_key()]
         try:
-            await bot.send_message(CHANNEL_ID, text)
+            await bot.send_message(dest_chat(), text)
         except Exception as ex:
             await state.update_data(chr_text=text)
-            return await callback.message.answer(f"❌ انتشار ناموفق: <code>{e(str(ex)[:200])}</code>")
+            return await callback.message.answer(f"❌ انتشار در {where} ناموفق: <code>{e(str(ex)[:200])}</code>")
         SETTINGS["chronicle_since"] = str(until)
-        record("انتشار وقایع‌نامه", "", f"{d.get('chr_count') or 0} رویداد", admin_only=False)
+        record("انتشار وقایع‌نامه", "", f"{d.get('chr_count') or 0} رویداد · {where}", admin_only=False)
         save_data()
-        return await callback.message.answer("✅ وقایع‌نامه در کانال منتشر شد؛ وقایع‌نامه‌ی بعدی از همین لحظه شروع می‌شود.")
+        return await callback.message.answer(
+            f"✅ وقایع‌نامه در {where} منتشر شد؛ وقایع‌نامه‌ی بعدی از همین لحظه شروع می‌شود."
+        )
     await callback.answer()

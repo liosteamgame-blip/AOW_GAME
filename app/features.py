@@ -34,6 +34,8 @@ EXTRA_SETTINGS = {
     "log_chat": "",
     # شروع بازه وقایع‌نامه بعدی (epoch)
     "chronicle_since": "0",
+    # مقصد انتشار وقایع‌نامه: main = کانال اصلی | tweet = کانال توییت
+    "chronicle_dest": "main",
     # سقف روزانه درخواست‌های xAI (کلید رایگان زود تمام می‌شود) + شمارنده امروز
     "ai_daily_limit": "15",
     "ai_used_date": "",

@@ -17,22 +17,31 @@ from app.features import enabled
 from app.keyboards import get_channel_buttons, get_trade_channel_buttons
 from app.loader import bot
 from app.players import city_of, groups_of_city
-from app.state import active_actions
+from app.state import SETTINGS, active_actions
 from app.storage import save_data
-from app.utils import _parse_hhmm, e, fmt_num, mtype_tag
+from app.utils import _parse_hhmm, e, fmt_num, mtype_tag, parse_days_setting
 from app.channel import send_report
 
 BUCKETS = (60, 30, 15, 5, 1)   # دقیقه — فقط در این آستانه‌ها پست ویرایش می‌شود
-MAX_HORIZON = 2 * 24 * 3600     # زمانی که بیش از ۲ روز دور باشد را جدی نمی‌گیریم
+MAX_HORIZON = 8 * 24 * 3600     # تا یک هفته (مثلاً چهارشنبه شب → شنبه) + حاشیه
 
 
 def _dt(ts: float) -> datetime:
     return datetime.fromtimestamp(ts, TZ) if TZ else datetime.fromtimestamp(ts)
 
 
+def _game_day(dt: datetime) -> bool:
+    """روز مجاز بازی طبق days_start (خالی = همه روزها)."""
+    days = parse_days_setting(SETTINGS.get("days_start") or "")
+    return days is None or dt.weekday() in days
+
+
 def parse_arrivals(time_str: str, base_ts: float) -> list:
-    """«12:00» یا «12:00, 14:30» → لیست epoch. اگر ساعت از لحظه‌ی ثبت گذشته باشد = روز بعد.
-    چند زمان = چند موج؛ هر موج بعد از موج قبلی است."""
+    """«12:00» یا «12:00, 14:30» → لیست epoch.
+    - اگر ساعت از لحظه‌ی ثبت گذشته باشد = روز بعد.
+    - اگر آن روز، روز بازی نباشد (days_start) → اولین روز مجاز بعدی
+      (لشکری که چهارشنبه شب ثبت شود، شنبه می‌رسد نه پنجشنبه).
+    - چند زمان = چند موج؛ هر موج بعد از موج قبلی است."""
     out = []
     prev = base_ts - 60
     for part in str(time_str or "").replace("،", ",").split(","):
@@ -42,6 +51,10 @@ def parse_arrivals(time_str: str, base_ts: float) -> list:
         base = _dt(base_ts)
         cand = base.replace(hour=hm[0], minute=hm[1], second=0, microsecond=0)
         while cand.timestamp() <= prev:
+            cand += timedelta(days=1)
+        for _ in range(7):
+            if _game_day(cand):
+                break
             cand += timedelta(days=1)
         ts = cand.timestamp()
         if ts - base_ts > MAX_HORIZON:

@@ -81,6 +81,30 @@ class ArrivalTests(Base):
         self.assertEqual(p("12:00, 11:00", base), [base + 2 * 3600, base + 25 * 3600], "موج دوم بعد از موج اول")
         self.assertEqual(p("-", base), [])
 
+    def test_arrival_skips_non_game_days(self):
+        """چهارشنبه شب ثبت → شنبه می‌رسد، نه پنجشنبه (days_start = شنبه تا چهارشنبه)."""
+        state.SETTINGS["days_start"] = "5,6,0,1,2"
+        try:
+            wed = datetime(2026, 10, 21, 23, 0, tzinfo=TZ)
+            self.assertEqual(wed.weekday(), 2)
+            p = arrivals.parse_arrivals
+            [ts] = p("08:15", wed.timestamp())
+            got = datetime.fromtimestamp(ts, TZ)
+            self.assertEqual((got.weekday(), got.day, got.hour, got.minute), (5, 24, 8, 15))
+            # همان شب چهارشنبه هنوز مجاز است
+            [ts2] = p("23:30", wed.timestamp())
+            self.assertEqual(datetime.fromtimestamp(ts2, TZ).day, 21)
+            # دو موج: موج دوم هم از روزهای تعطیل رد می‌شود
+            a, b = p("23:40, 09:00", wed.timestamp())
+            self.assertEqual(datetime.fromtimestamp(a, TZ).day, 21)
+            self.assertEqual(datetime.fromtimestamp(b, TZ).day, 24)
+            # جمعه ثبت شود (روز تعطیل) → همان ساعت، شنبه
+            fri = datetime(2026, 10, 23, 10, 0, tzinfo=TZ)
+            [ts3] = p("12:00", fri.timestamp())
+            self.assertEqual(datetime.fromtimestamp(ts3, TZ).day, 24)
+        finally:
+            state.SETTINGS["days_start"] = ""
+
     async def test_countdown_and_arrival_messages(self):
         aid, act = await self.campaign("45")
         arr = act["arrival"]
@@ -197,6 +221,23 @@ class ChronicleTests(Base):
         self.assertFalse(self.to(CHANNEL))
         await self.send(callback(ADMIN, "chr:menu"))
         self.assertIn("رویداد عمومی‌ای ثبت نشده", self.tg.last_text())
+
+    async def test_destination_switch_to_tweet_channel(self):
+        await self.campaign("45")
+        state.EXTRA_ROLES[NARRATOR] = ["narrator"]
+        try:
+            await self.send(callback(NARRATOR, "chr:dest"))          # راوی نمی‌تواند مقصد را عوض کند
+            self.assertEqual(state.SETTINGS.get("chronicle_dest"), "main")
+            await self.send(callback(ADMIN, "chr:menu"))
+            self.assertIn("chr:dest", self.tg.buttons())
+            await self.send(callback(ADMIN, "chr:dest"))
+            self.assertEqual(state.SETTINGS["chronicle_dest"], "tweet")
+            self.tg.clear()
+            await self.send(callback(ADMIN, "chr:pub"))
+            self.assertTrue(any("وقایع‌نامه" in x for x in self.to(-100333)))
+            self.assertFalse(self.to(CHANNEL))
+        finally:
+            state.SETTINGS["chronicle_dest"] = "main"
 
     async def test_narrator_can_player_cannot(self):
         await self.campaign("45")
