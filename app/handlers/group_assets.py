@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import ADMIN_ID, DIV
 from app.loader import bot, dp
 from app.state import GROUPS, all_players, authenticated_users, pending_confirms
-from app.utils import e, is_back_text, norm_cmd
+from app.utils import e, is_back_text, norm_cmd, send_chunks
 from app.factions import _canonical_city_name, country_key
 from app.states import GameStates
 from app.players import (
@@ -138,7 +138,7 @@ async def handle_view_assets_in_chat(message: types.Message, state: FSMContext):
             ok = bool(city)
     if not ok or not city:
         return await message.answer(err or "❌ دسترسی یا شهر مشخص نیست.")
-    text = format_city_asset_view(city)
+    text = format_city_asset_view(city, viewer=uid)
     chunks = []
     body = text
     while body:
@@ -172,7 +172,8 @@ async def handle_gasset_menu(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.update_data(gasset_city=city)
     if action == "view":
-        return await callback.message.answer(format_city_asset_view(city)[:4000])
+        body = format_city_asset_view(city, viewer=callback.from_user.id)
+        return await send_chunks(callback.message, body.split("\n"))
     if action == "edit":
         await callback.message.answer(
             f"✏️ ویرایش دارایی <b>{e(city)}</b>\n"

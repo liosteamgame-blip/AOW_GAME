@@ -7,6 +7,7 @@ from app.utils import e, fmt_num
 from app.factions import FACTIONS, FACTION_META, country_key
 from app.economy.sheet import get_city_asset_stats, get_city_asset_text, normalize_stats_keys
 from app.economy.assets import realm_breakdown
+from app.castles import castle_trait_block
 
 
 # گروه‌بندی نمایش اعداد استخراج‌شده — جلوی هر بخش معنی مشخص است
@@ -345,12 +346,13 @@ def format_realm_view(side: str) -> str:
     return "\n".join(lines)
 
 
-def format_city_asset_view(city: str) -> str:
-    """دارایی شخصی یک شهر: متن کامل شیت ثبت‌شده."""
+def format_city_asset_view(city: str, viewer: int | None = None) -> str:
+    """دارایی شخصی یک شهر: متن کامل شیت ثبت‌شده.
+    viewer: اگر فرمانده‌ی همین شهر / لیدر همین جناح / ادمین باشد، ویژگی قلعه زیر شیت می‌آید (فقط نمایش)."""
     side = country_key(city)
     flag, title = FACTION_META.get(side, ("", side or "؟")) if side else ("", "؟")
     text = get_city_asset_text(city)
     header = f"📦 <b>دارایی شخصی — {e(city)}</b>\n🏴 ساید: {flag}{title}\n{DIV}\n"
-    if not text:
-        return header + "— برای این شهر هنوز دارایی ثبت نشده —"
-    return header + text
+    body = header + (text or "— برای این شهر هنوز دارایی ثبت نشده —")
+    trait = castle_trait_block(city, viewer)
+    return f"{body}\n\n{trait}" if trait else body

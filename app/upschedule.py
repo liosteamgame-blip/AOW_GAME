@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.audit import record
+from app.castles import castle_trait_line
 from app.config import ADMIN_ID, DIV, TZ
 from app.events import active_events, ups_left
 from app.features import enabled, setting
@@ -76,6 +77,9 @@ def preview_text(run_at: datetime) -> str:
         f"⏰ زمان اجرا: <b>{run_at.strftime('%H:%M')}</b> — {_DAY_FA[run_at.weekday()]} {run_at.strftime('%m/%d')}",
         f"🏙 شهرهای اتو: <b>{fmt_num(len(cities))}</b>" + (f"\n<i>{e('، '.join(cities[:30]))}</i>" if cities else ""),
     ]
+    traits = [f"• {e(c)}: {castle_trait_line(c).replace('🏰 یادآوری ویژگی قلعه: ', '')}" for c in cities if castle_trait_line(c)]
+    if traits:
+        lines.append("🏰 <b>یادآوری ویژگی قلعه</b> <i>(فقط اطلاع؛ خودکار اعمال نمی‌شود)</i>\n" + "\n".join(traits))
     evs = active_events()
     if evs:
         lines.append("🌍 رویدادهای فعال: " + "، ".join(f"{ev['title']} ({fmt_num(ups_left(eid))} آپ)" for eid, ev in evs))
@@ -83,7 +87,7 @@ def preview_text(run_at: datetime) -> str:
         "\n⚠️ <b>بدون تایید شما آپ اجرا نمی‌شود.</b>\n"
         "قبل از اجرا از همه شهرها بکاپ گرفته می‌شود و بعد کارنامه‌ها فرستاده می‌شوند."
     )
-    return "\n".join(lines)
+    return "\n".join(lines)[:4000]
 
 
 def preview_keyboard(run_at: datetime):

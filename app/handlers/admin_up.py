@@ -17,6 +17,7 @@ from app.keyboards import _btn, get_admin_inline_keyboard, get_back_keyboard
 from app.storage import save_data
 from app.economy.assets import is_auto_city
 from app.economy.up import restore_city_up
+from app.castles import castle_trait_line
 from app.economy.upflow import run_up_all, run_up_one, up_all_running, up_one_running
 
 
@@ -177,8 +178,9 @@ async def admin_up_confirm(callback: types.CallbackQuery):
         f"♻️ <b>تأیید آپ تکی</b>\n{DIV}\n"
         f"🏙 شهر: <b>{e(city)}</b>\n"
         f"🤖 اتو: {'بله' if is_auto_city(city) else 'خیر (با force ادمین)'}\n"
-        f"📦 دارایی: {'دارد' if has_asset else 'خالی'}\n\n"
-        "پس از تأیید، بکاپ گرفته و بازدهی‌ها اعمال می‌شوند.",
+        f"📦 دارایی: {'دارد' if has_asset else 'خالی'}\n"
+        + (f"{castle_trait_line(city)}\n" if castle_trait_line(city) else "")
+        + "\nپس از تأیید، بکاپ گرفته و بازدهی‌ها اعمال می‌شوند.",
         reply_markup=builder.as_markup(),
     )
 
@@ -266,8 +268,9 @@ async def handle_group_up_command(message: types.Message):
     await message.answer(
         f"♻️ <b>آپ تکی</b>\n{DIV}\n"
         f"🏙 شهر این گپ: <b>{e(city)}</b>\n"
-        f"🤖 اتو: {'بله' if is_auto_city(city) else 'خیر'}\n\n"
-        "با تأیید، بکاپ گرفته و بازدهی‌ها اعمال می‌شود.",
+        f"🤖 اتو: {'بله' if is_auto_city(city) else 'خیر'}\n"
+        + (f"{castle_trait_line(city)}\n" if castle_trait_line(city) else "")
+        + "\nبا تأیید، بکاپ گرفته و بازدهی‌ها اعمال می‌شود.",
         reply_markup=builder.as_markup(),
     )
 

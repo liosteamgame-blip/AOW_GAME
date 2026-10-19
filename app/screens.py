@@ -166,7 +166,7 @@ async def start_asset_view(callback: types.CallbackQuery, state: FSMContext):
                 "❌ شهر شما مشخص نیست.",
                 reply_markup=get_inline_back_row("menu:economy"),
             )
-        text = format_city_asset_view(city)
+        text = format_city_asset_view(city, viewer=callback.from_user.id)
         if len(text) > 3500:
             await send_chunks(callback.message, [text], reply_markup=None)
             return await callback.message.answer(

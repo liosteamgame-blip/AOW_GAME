@@ -122,5 +122,40 @@ class GuideTests(Base):
         self.assertEqual(state.SETTINGS["guide_commander"], "")
 
 
+class CastleTraitTests(Base):
+    async def test_commander_sees_trait_under_sheet(self):
+        await self.send(message(PLAYER, "دارایی", **self.g))
+        txt = "\n".join(self.tg.texts())
+        self.assertIn("ویژگی قلعه", txt)
+        self.assertIn("۲۵٪ وضعیت اقتصاد بهتر", txt)          # london
+        self.assertLess(txt.index("شیت لندن"), txt.index("ویژگی قلعه"), "زیر شیت")
+
+    def test_visibility(self):
+        from app.economy.views import format_city_asset_view
+        state.LEADERS["monarchist"] = [LEADER]
+        state.LEADERS["parliamentarian"] = [OTHER]
+        see = lambda uid: "ویژگی قلعه" in format_city_asset_view(LONDON, viewer=uid)  # noqa: E731
+        self.assertTrue(see(PLAYER), "فرمانده همان شهر")
+        self.assertTrue(see(LEADER), "لیدر همان جناح")
+        self.assertTrue(see(ADMIN), "ادمین")
+        self.assertFalse(see(OTHER), "لیدر/فرمانده جناح دیگر")
+        self.assertFalse(see(None))
+
+    def test_amiens_marked_unverified(self):
+        from app.castles import castle_trait_block, castle_trait_line
+        self.assertIn("تأیید نشده", castle_trait_block("amiens_france", ADMIN))
+        self.assertIn("توپ صحرایی", castle_trait_block("amiens_france", ADMIN))
+        self.assertIn("تأیید نشده", castle_trait_line("amiens_france"))
+        self.assertNotIn("تأیید نشده", castle_trait_line(LONDON))
+
+    async def test_up_preview_reminder_and_no_effect_on_calc(self):
+        state.CITY_ASSETS[LONDON] = {"text": "", "stats": {"سکه": 0}, "yields": {"خزانه": 1000}}
+        await self.send(callback(ADMIN, f"up_confirm:{LONDON}"))
+        self.assertIn("یادآوری ویژگی قلعه", self.tg.last_text())
+        await self.send(callback(ADMIN, f"up_one:{LONDON}"))
+        self.assertEqual(state.CITY_ASSETS[LONDON]["stats"]["سکه"], 1000, "باف قلعه (+۲۵٪) نباید اعمال شود")
+        self.assertFalse(any(b.get("source") == "castle" for b in state.CITY_BUFFS.get(LONDON, [])))
+
+
 if __name__ == "__main__":
     unittest.main()

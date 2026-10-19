@@ -916,7 +916,7 @@ async def handle_asset_view(callback: types.CallbackQuery, state: FSMContext):
                 "❌ شهر شخصی شما مشخص نیست.",
                 reply_markup=get_inline_back_row("menu:assets"),
             )
-        body = format_city_asset_view(city)
+        body = format_city_asset_view(city, viewer=callback.from_user.id)
         if len(body) > 3500:
             await send_chunks(callback.message, [body], reply_markup=None)
             return await callback.message.answer(
@@ -977,7 +977,7 @@ async def handle_asset_city_idx(callback: types.CallbackQuery):
         return await callback.answer("شهر پیدا نشد.", show_alert=True)
     city = cities[idx]
     await callback.answer()
-    body = format_city_asset_view(city)
+    body = format_city_asset_view(city, viewer=callback.from_user.id)
     # متن شیت جدا از دکمه‌ها تا محدودیت تلگرام نخورد
     if len(body) > 3500:
         await send_chunks(callback.message, [body], reply_markup=None)
@@ -1000,7 +1000,7 @@ async def handle_asset_city(callback: types.CallbackQuery):
         if not side or my_side != side:
             return await callback.answer("❌ فقط شهرهای ساید خودتان.", show_alert=True)
     await callback.answer()
-    body = format_city_asset_view(city)
+    body = format_city_asset_view(city, viewer=callback.from_user.id)
     if len(body) > 4000:
         await send_chunks(callback.message, [body], reply_markup=get_inline_back_row("menu:assets"))
     else:
