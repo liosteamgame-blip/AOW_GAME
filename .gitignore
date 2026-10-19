@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+data.json
+data.json.*
+*.tmp
+aof_data.json
+backup/
+.pytest_cache/
+tests/output/
+.venv/
