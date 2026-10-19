@@ -10,6 +10,7 @@ from app.utils import e, mtype_tag, need_text, plain
 from app.factions import city_by_index
 from app.states import GameStates
 from app.players import city_of, context_city, is_admin, is_player, player_group_access
+from app.permissions import assistant_block_text
 from app.gametime import MILITARY_KINDS, military_closed_text, parse_player_time
 from app.keyboards import (
     get_back_keyboard,
@@ -47,6 +48,9 @@ async def handle_type_pick(callback: types.CallbackQuery, state: FSMContext):
     closed = military_closed_text(uid) if kind in MILITARY_KINDS else ""
     if closed:   # دکمه‌ی قدیمی که قبل از استاپ ارسال شده
         return await callback.answer(closed[:200], show_alert=True)
+    blocked = assistant_block_text(uid, chat.id if chat else None, kind)
+    if blocked:
+        return await callback.answer(blocked[:200], show_alert=True)
     await callback.answer()
     try:                                     # دکمه‌ها برداشته می‌شوند و انتخاب نمایش داده می‌شود
         await callback.message.edit_text(f"✅ نوع {KIND_NOUN[kind]}: <b>{MTYPE_EMOJI[mtype]} {MTYPES[mtype]}</b>")

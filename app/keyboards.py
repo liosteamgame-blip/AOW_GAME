@@ -17,7 +17,9 @@ from app.config import (
 )
 from app.state import SETTINGS, authenticated_users
 from app.factions import FACTION_META, cities_by_faction, country_key
-from app.players import is_admin, is_leader, is_player
+from app.players import is_admin, is_leader, is_player, leader_side
+from app.features import enabled
+from app.permissions import roles_of
 
 
 # ======================================================================
@@ -34,8 +36,8 @@ def _btn(text, callback_data, style=None):
     return types.InlineKeyboardButton(**kwargs)
 
 
-def get_main_menu_keyboard(user_id=None):
-    """منوی اصلی — ۴ بخش: نظامی · اقتصادی · تجارت · بیانیه"""
+def get_main_menu_keyboard(user_id=None, chat_id=None):
+    """منوی اصلی — ۴ بخش: نظامی · اقتصادی · تجارت · بیانیه (+ دکمه‌های نقش‌محور)"""
     builder = InlineKeyboardBuilder()
     builder.row(_btn("⚔️ منوی نظامی", "menu:military", "danger"))
     builder.row(_btn("💰 منوی اقتصادی", "menu:economy", "success"))
@@ -43,8 +45,24 @@ def get_main_menu_keyboard(user_id=None):
         _btn("🐪 تجارت", "menu:trade", "primary"),
         _btn("📜 بیانیه", "menu:statement", "primary"),
     )
+    extra = []
+    if user_id and enabled("leader_panel") and leader_side(user_id):
+        extra.append(_btn("🏴 پنل جناح", "ldr:menu", "primary"))
+    if user_id and chat_id and enabled("assistant_perms") and "commander" in roles_of(user_id, chat_id):
+        extra.append(_btn("🤝 اختیارات کمکی‌ها", "asst:menu"))
+    if extra:
+        builder.row(*extra)
     builder.row(_btn("🔙 بستن منو", "menu:close"))
     return builder.as_markup()
+
+
+def get_pv_menu_keyboard(user_id=None):
+    """منوی پی‌وی: فقط نقش‌هایی که کار خصوصی دارند (فعلاً لیدر جناح). None = بدون دکمه."""
+    if user_id and enabled("leader_panel") and leader_side(user_id):
+        builder = InlineKeyboardBuilder()
+        builder.row(_btn("🏴 پنل جناح", "ldr:menu", "primary"))
+        return builder.as_markup()
+    return None
 
 
 def get_military_menu_keyboard():
@@ -217,6 +235,15 @@ def get_admin_inline_keyboard():
         _btn("🏙 واگذاری شهر", "adm_transfer", "danger"),
         _btn("🖼 عکس منو", "adm_photo:menu", "primary"),
     )
+    builder.row(
+        _btn("🧪 فیچرها", "adm_features", "primary"),
+        _btn("📜 لاگ ممیزی", "adm_audit"),
+    )
+    builder.row(
+        _btn("🎭 نقش‌ها", "adm_roles"),
+        _btn("🔐 تاییدهای معلق", "adm_approvals"),
+    )
+    builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"))
     builder.row(_btn("⚙️ مدیریت", "adm_manage"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
     builder.row(_btn("📋 وضعیت", "adm_report"), _btn("❓ راهنما", "adm_help"))
     builder.row(_btn("🚪 خروج", "adm_logout", "danger"))

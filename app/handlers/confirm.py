@@ -8,6 +8,7 @@ from app.loader import dp
 from app.state import pending_confirms
 from app.utils import e
 from app.states import GameStates
+from app.permissions import assistant_block_text
 from app.gametime import MILITARY_KINDS, military_closed_text
 from app.menus import go_menu
 from app.flows import (
@@ -117,6 +118,15 @@ async def _process_universal_confirm(callback: types.CallbackQuery, state: FSMCo
         return
 
     # فرمی که قبل از استاپ شروع شده ولی بعد از استاپ تایید می‌شود
+    chat_id = callback.message.chat.id if callback.message else None
+    blocked = assistant_block_text(callback.from_user.id, chat_id, kind)
+    if blocked:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return await go_menu(callback.message, state, e(blocked))
+
     if kind in MILITARY_KINDS:
         closed = military_closed_text(callback.from_user.id)
         if closed:

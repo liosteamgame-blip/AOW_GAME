@@ -1,0 +1,22 @@
+{
+  "message": [
+    "assistant_perms_cmd",
+    "handle_narrator_role",
+    "leader_msg_draft",
+    "leader_poll_draft"
+  ],
+  "callback_query": [
+    "admin_approval_decide",
+    "admin_approvals_menu",
+    "admin_audit_menu",
+    "admin_audit_undo",
+    "admin_feature_toggle",
+    "admin_features_menu",
+    "admin_roles_menu",
+    "assistant_perms_cb",
+    "leader_panel_router"
+  ],
+  "poll_answer": [
+    "leader_poll_vote"
+  ]
+}

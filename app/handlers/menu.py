@@ -8,6 +8,7 @@ from app.config import DIV
 from app.loader import dp
 from app.utils import plain
 from app.players import is_admin, is_player, player_group_access
+from app.permissions import assistant_block_text
 from app.gametime import MILITARY_KINDS, military_closed_text
 from app.keyboards import get_military_menu_keyboard
 from app.menus import (
@@ -80,6 +81,9 @@ async def handle_menu_click(callback: types.CallbackQuery, state: FSMContext):
         closed = military_closed_text(uid)
         if closed:
             return await callback.answer(closed[:200], show_alert=True)
+    blocked = assistant_block_text(uid, callback.message.chat.id if callback.message else None, kind)
+    if blocked:
+        return await callback.answer(blocked[:200], show_alert=True)
     # لشکرکشی/محاصره/جنگ/تجارت/بیانیه — دسترسی گپ/پی‌وی
     if kind in ("campaign", "siege", "war", "trade", "statement"):
         chat = callback.message.chat if callback.message else None

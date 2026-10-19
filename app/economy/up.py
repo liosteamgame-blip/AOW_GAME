@@ -9,6 +9,7 @@ from app.state import CITY_ASSETS, CITY_BUFFS, UP_HISTORY_MAX, UP_SNAPSHOTS
 from app.utils import e, fmt_num
 from app.players import groups_of_city, player_ids_for_city
 from app.storage import save_data
+from app.audit import audited
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE, UP_YIELD_DEST
 from app.economy.sheet import (
     _annotate_yield_pct,
@@ -74,6 +75,7 @@ def _snap_entry(city: str):
     return None
 
 
+@audited("بازگردانی آپ")
 def restore_city_up(city: str, use_history: int = 0) -> tuple:
     """بازگردانی به قبل از آپ. use_history=0 آخرین؛ 1..UP_HISTORY_MAX قدیمی‌تر."""
     prev = UP_SNAPSHOTS.get(city)
@@ -123,6 +125,7 @@ def snapshot_all_assets(reason: str = "manual") -> int:
     return n
 
 
+@audited("آپ هفتگی")
 def run_weekly_up_for_city(city: str, force: bool = False) -> str:
     """
     آپ هفتگی — بازدهی‌ها به مقصد مشخص:

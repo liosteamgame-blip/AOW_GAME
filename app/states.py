@@ -77,3 +77,7 @@ class GameStates(StatesGroup):
     redirect_confirm = State()
     back_time = State()
     back_confirm = State()
+
+    # پنل لیدر جناح
+    ldr_msg = State()
+    ldr_poll = State()

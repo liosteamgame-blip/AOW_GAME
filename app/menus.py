@@ -13,7 +13,7 @@ from app.factions import FACTION_META, country_key
 from app.states import GameStates
 from app.players import player_group_access
 from app.gametime import game_time_status
-from app.keyboards import _btn, get_back_keyboard, get_main_menu_keyboard, get_type_keyboard
+from app.keyboards import _btn, get_back_keyboard, get_main_menu_keyboard, get_pv_menu_keyboard, get_type_keyboard
 from app.channel import send_report
 
 
@@ -45,11 +45,15 @@ async def go_menu(message: types.Message, state: FSMContext, text=MENU_TEXT, use
         pending_confirms.pop(uid, None)
     await state.clear()
     if message.chat.type == "private":
-        await message.answer(text if text != MENU_TEXT else PV_PLAYER_TEXT, reply_markup=ReplyKeyboardRemove())
+        pv_markup = get_pv_menu_keyboard(uid)
+        await message.answer(
+            text if text != MENU_TEXT else PV_PLAYER_TEXT,
+            reply_markup=pv_markup or ReplyKeyboardRemove(),
+        )
         return
     await state.set_state(GameStates.main_menu)
     body = text if text != MENU_TEXT else build_menu_text(uid, message)
-    markup = get_main_menu_keyboard(uid)
+    markup = get_main_menu_keyboard(uid, chat_id=message.chat.id)
     photo_id = (SETTINGS.get("photo_menu") or "").strip()
 
     # اگر پیام از خود ربات است (مثلاً callback.message) → ویرایش همان پیام

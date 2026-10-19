@@ -10,6 +10,7 @@ from app.state import AUTO_CITIES, CITY_ASSETS, GROUPS, PLAYER_CODES, authentica
 from app.utils import _clean_item_name, _norm_country_token, e, fmt_num, normalize_digits, num_plain
 from app.factions import all_known_cities, cities_for_side_assets, country_key
 from app.storage import save_data
+from app.audit import audited
 from app.economy.rules import (
     CASTLE_CAPACITY,
     CASTLE_LEVEL_INFO,
@@ -116,6 +117,12 @@ def realm_breakdown(side: str):
     return normalize_stats_keys(total), by_city, city_list
 
 
+def _delta_note(city, deltas=None, note="", *a, **k):
+    parts = ", ".join(f"{n} {fmt_num(v, signed=True)}" for n, v in (deltas or {}).items())
+    return (f"{note} · " if note else "") + parts
+
+
+@audited("ویرایش موجودی", note_fn=_delta_note)
 def apply_stat_delta(city: str, deltas: dict, note: str = "") -> str:
     """
     اعمال تغییر روی stats + اعداد لیست شیت.
@@ -172,6 +179,7 @@ def apply_stat_delta(city: str, deltas: dict, note: str = "") -> str:
     return "\n".join(lines_log) or "—"
 
 
+@audited("افزایش لول رایگان", note_fn=lambda city, name, levels=1, *a, **k: f"{name} +{levels}")
 def free_level_up(city: str, name: str, levels: int = 1):
     """افزایش سطح بدون هزینه (ادمین) — لول و بازدهی جدول روی شیت."""
     levels = max(1, int(levels or 1))
@@ -306,6 +314,7 @@ async def _process_gasset_form(message, kind: str, city: str, txt: str) -> str:
     return "❌ نوع فرم ناشناخته."
 
 
+@audited("بازدهی رول/باف/نرف")
 def apply_extra_yields_to_city(city: str, data: dict) -> str:
     """ذخیره بازدهی رول/باف در دارایی شهر و پچ شیت."""
     entry = dict(CITY_ASSETS.get(city) or {})
@@ -349,6 +358,7 @@ def apply_extra_yields_to_city(city: str, data: dict) -> str:
     return block
 
 
+@audited("ارتقا", note_fn=lambda city, name, levels, *a, **k: f"{name} +{levels}")
 def apply_upgrade_levels(city: str, name: str, levels: int, force: bool = False) -> tuple[bool, str]:
     """
     ارتقا:
@@ -654,6 +664,7 @@ def _append_change(city: str, line: str):
     CITY_ASSETS[city] = entry
 
 
+@audited("ست شاپ", city_arg=1)
 async def _commit_shop_text(message: types.Message, city: str, body: str):
     packs = _parse_shop_packs("شاپ:\n" + body)
     shop = _parse_shop_from_sheet("شاپ:\n" + body)

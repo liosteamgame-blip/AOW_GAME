@@ -13,6 +13,7 @@ from aiogram.types import CallbackQuery
 
 from app import state as app_state
 from app.config import ADMIN_ID
+from app.features import enabled
 from app.players import is_admin, is_player, leader_side
 from app.state import EXTRA_ROLES, GROUPS
 
@@ -116,6 +117,8 @@ def role_badges(user_id: int, chat_id: int | None = None) -> str:
 
 def assistant_allowed(user_id: int, chat_id: int | None, action: str) -> bool:
     """آیا کمکیِ این گپ اجازه‌ی این کار را دارد؟ (فرمانده/ادمین همیشه بله)."""
+    if not enabled("assistant_perms"):
+        return True
     if chat_id is None or chat_id not in GROUPS:
         return True
     _cmds, asst = _group_members(chat_id)
@@ -123,6 +126,19 @@ def assistant_allowed(user_id: int, chat_id: int | None, action: str) -> bool:
         return True
     perms = (GROUPS.get(chat_id) or {}).get("assistant_perms") or {}
     return bool(perms.get(action, True))
+
+
+# نوع فرمان در تایید نهایی → کلید اختیار کمکی
+CONFIRM_KIND_ACTION = {"campaign": "campaign", "siege": "siege", "war": "war",
+                       "ann": "statement", "trade": "trade", "mtrade": "trade"}
+
+
+def assistant_block_text(user_id: int, chat_id: int | None, action: str) -> str:
+    """متن خطا اگر فرمانده این فرمان را برای کمکی‌ها بسته باشد؛ در غیر این صورت ''."""
+    action = CONFIRM_KIND_ACTION.get(action, action)
+    if action not in ASSIST_ACTIONS or assistant_allowed(user_id, chat_id, action):
+        return ""
+    return f"⛔️ سرورم، فرمانده‌ی این شهر «{ASSIST_ACTIONS[action]}» را برای کمکی‌ها بسته است."
 
 
 def grant_role(user_id: int, role: str) -> bool:
@@ -177,6 +193,8 @@ CALLBACK_ACL = (
     ("role:", "roles.manage"),
     ("audit_undo:", "audit.undo"),
     ("appr:", "approve.sensitive"),
+    ("ldr:", "leader.panel"),
+    ("asst:", "assistants.manage"),
 )
 # مسیرهای gasset که فقط ادمین است (تازه‌سازی برای پلیر آزاد است)
 GASSET_ADMIN = ("gasset:edit:", "gasset:shop:", "gasset:lv:", "gasset:loss:", "gasset:buff:")

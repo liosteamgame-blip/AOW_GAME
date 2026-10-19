@@ -17,6 +17,8 @@ from app.players import is_admin, is_group_chat, is_player
 from app.keyboards import _btn, get_admin_inline_keyboard
 from app.storage import apply_restore, load_backup_document, push_backup, restore_preview_text
 from app.menus import go_menu
+from app.audit import record
+from app.approvals import needs_approval, request_approval
 
 
 # ======================================================================
@@ -101,8 +103,18 @@ async def handle_restore_confirm(callback: types.CallbackQuery):
     if action == "restore_no":
         await callback.answer("لغو شد")
         return await callback.message.answer("❌ بازیابی لغو شد؛ داده‌ها تغییری نکردند.")
+    if needs_approval(callback.from_user.id):
+        await callback.answer("برای تایید مالک فرستاده شد")
+        await request_approval(
+            "restore", {}, callback.from_user.id,
+            "بازیابی کامل داده از فایل json (همه داده‌های فعلی جایگزین می‌شود)",
+            blob=pend["raw"],
+        )
+        return await callback.message.answer("🔐 بازیابی کامل نیاز به تایید مالک دارد؛ درخواست فرستاده شد.")
     await callback.answer("در حال بازیابی…")
     ok, info = await apply_restore(pend["raw"])
+    if ok:
+        record("بازیابی کامل داده", "", "از فایل json")
     if ok:
         await callback.message.answer(
             f"{info}\nبرای اطمینان <code>/backup</code> بزنید تا پین به‌روز شود.",

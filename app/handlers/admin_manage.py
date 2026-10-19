@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.config import DIV
 from app.loader import bot, dp
-from app.state import CITY_ASSETS, GROUPS, PLAYER_CODES, all_players, authenticated_users
+from app.state import CITY_ASSETS, PLAYER_CODES, all_players, authenticated_users
 from app.utils import e
 from app.factions import FACTIONS, FACTION_META, country_key, gen_code
 from app.states import GameStates
@@ -22,6 +22,7 @@ from app.keyboards import (
 from app.storage import save_data
 from app.economy.assets import realm_breakdown
 from app.economy.views import format_assets_block, format_realm_view
+from app.approvals import delete_city, needs_approval, request_approval
 
 
 # ---------------- دارایی در پنل ادمین ----------------
@@ -210,27 +211,25 @@ async def admin_del_city_yes(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         return await callback.answer()
     code = callback.data.split(":", 1)[1]
-    city = PLAYER_CODES.pop(code, None)
+    city = PLAYER_CODES.get(code)
     if not city:
         await callback.answer("از قبل حذف شده.", show_alert=True)
         return
-    # حذف فرمانده مرتبط
-    uid = None
-    for u_id, u in list(authenticated_users.items()):
-        if u.get("role") == "player" and u.get("code") == code:
-            uid = u_id
-            authenticated_users.pop(u_id, None)
-            all_players.discard(u_id)
-            break
-    # قطع گروه‌های این شهر
-    for gid, g in list(GROUPS.items()):
-        if (g.get("code") == code) or (g.get("city") or "").lower() == str(city).lower():
-            GROUPS.pop(gid, None)
-    save_data(critical=True)
-    await callback.answer("حذف شد")
-    msg = f"✅ شهر <b>{e(city)}</b> حذف شد.\n🔑 کد باطل: <code>{e(code)}</code>"
-    if uid:
-        msg += f"\n👤 فرمانده <code>{uid}</code> هم حذف شد."
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    if needs_approval(callback.from_user.id):
+        await callback.answer("برای تایید مالک فرستاده شد")
+        await request_approval(
+            "delete_city", {"code": code}, callback.from_user.id,
+            f"حذف شهر <b>{e(city)}</b> (کد <code>{e(code)}</code>)",
+        )
+        return await callback.message.answer(
+            "🔐 حذف شهر نیاز به تایید مالک دارد؛ درخواست فرستاده شد.", reply_markup=get_manage_keyboard()
+        )
+    ok, msg = delete_city(code)
+    await callback.answer("حذف شد" if ok else "از قبل حذف شده")
     await callback.message.answer(msg, reply_markup=get_manage_keyboard())
 
 

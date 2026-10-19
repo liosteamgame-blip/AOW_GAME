@@ -14,7 +14,18 @@ from app.states import GameStates
 from app.players import is_admin
 from app.keyboards import _btn, _timing_menu_keyboard, get_admin_inline_keyboard, get_back_keyboard
 from app.channel import _broadcast_timing_to_groups
-from app.economy.assets import transfer_city
+from app.approvals import do_transfer, needs_approval, request_approval
+
+
+async def _transfer_or_request(uid: int, src: str, dst: str) -> str:
+    """واگذاری مستقیم، یا اگر تایید دونفره روشن و کاربر مالک نیست → درخواست برای مالک."""
+    if needs_approval(uid):
+        await request_approval(
+            "transfer", {"src": src, "dst": dst}, uid,
+            f"واگذاری <b>{e(src)}</b> → <b>{e(dst)}</b>",
+        )
+        return "🔐 واگذاری شهر نیاز به تایید مالک دارد؛ درخواست فرستاده شد."
+    return do_transfer(src, dst)
 
 
 @dp.callback_query(F.data == "adm_transfer")
@@ -123,7 +134,7 @@ async def admin_transfer_to_city(callback: types.CallbackQuery, state: FSMContex
         return await callback.answer("نامعتبر", show_alert=True)
     dst = cities[idx]
     await callback.answer()
-    msg = transfer_city(src, dst)
+    msg = await _transfer_or_request(callback.from_user.id, src, dst)
     await state.clear()
     await callback.message.answer(msg, reply_markup=get_admin_inline_keyboard())
 
@@ -163,6 +174,6 @@ async def admin_transfer_save(message: types.Message, state: FSMContext):
         return await message.answer(
             f"❌ شهر مبدأ <b>{e(src)}</b> پیدا نشد. نام دقیق را بنویسید یا «{BTN_BACK}» بزنید."
         )
-    msg = transfer_city(src, dst)
+    msg = await _transfer_or_request(message.from_user.id, src, dst)
     await state.clear()
     await message.answer(msg, reply_markup=get_admin_inline_keyboard())

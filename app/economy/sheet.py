@@ -1,6 +1,7 @@
 """خواندن و به‌روزرسانی متن شیت دارایی."""
 import re
 
+from app.audit import audited
 from app.state import CITY_ASSETS
 from app.utils import _clean_item_name, fmt_num, format_goods, normalize_digits, num_plain
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS
@@ -404,6 +405,7 @@ def get_city_asset_stats(city: str) -> dict:
         return out
     return {}
 
+@audited("ثبت شیت دارایی")
 def set_city_asset(city: str, text: str):
     """
     متن کامل را عیناً ذخیره می‌کند (هیچ کاراکتری عوض نمی‌شود).

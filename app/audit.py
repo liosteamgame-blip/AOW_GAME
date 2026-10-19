@@ -13,6 +13,8 @@ import time
 import zlib
 from datetime import datetime
 
+from aiogram import BaseMiddleware
+
 from app.config import ADMIN_ID, DIV, TZ
 from app.features import enabled, setting
 from app.loader import bot
@@ -25,6 +27,18 @@ _DEPTH = contextvars.ContextVar("audit_depth", default=0)
 
 UNDO_KEEP = 30          # فقط ۳۰ مورد آخر نسخه‌ی «قبل» کامل دارند (حجم بکاپ کم بماند)
 AUDIT_MAX = 300
+
+
+class ActorMiddleware(BaseMiddleware):
+    """روی dp.update: کاربرِ آپدیت جاری را در CURRENT_ACTOR می‌گذارد (برای لاگ ممیزی)."""
+
+    async def __call__(self, handler, event, data):
+        user = data.get("event_from_user")
+        tok = CURRENT_ACTOR.set(int(user.id) if user else 0)
+        try:
+            return await handler(event, data)
+        finally:
+            CURRENT_ACTOR.reset(tok)
 
 
 def actor_is_admin(uid: int) -> bool:

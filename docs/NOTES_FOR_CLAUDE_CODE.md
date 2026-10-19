@@ -91,19 +91,14 @@
 
 ربات الان هیچ‌کدام را اجرا نمی‌کند. پیشنهاد: کلید `rules_calendar` با پیش‌فرض خاموش.
 
-## فایل‌های docs/wip (پیش‌نویس، وصل نشده، تست نشده)
+## نقش‌ها، مجوزها و لاگ ممیزی (مرحله ۱ — پیاده‌شده)
 
-- `features.py`: کلیدهای روشن/خاموش فیچرها در `SETTINGS["features"]`، به‌علاوه‌ی تنظیمات تکمیلی.
-- `permissions.py`: این‌ها را دارد:
-  - `roles_of` و جدول `PERMS` و `can()`
-  - `assistant_allowed` برای اختیارات کمکی
-  - `AclMiddleware` که پیشوندهای callback ادمینی را مرکزی می‌بندد
-- `audit.py`: این‌ها را دارد:
-  - لاگ ممیزی با `contextvar` برای تشخیص انجام‌دهنده (نیاز به یک outer middleware روی `dp.update` دارد که `CURRENT_ACTOR` را ست کند)
-  - دکوراتور `@audited` برای توابع تغییر دارایی
-  - برگشت (undo) با چک fingerprint
-
-می‌توانی این‌ها را مبنا قرار بدهی. **قبل از استفاده:**
-- آن‌ها را به `app/` منتقل کن.
-- داده‌هایشان را به `state.py` و `storage.py` اضافه کن.
-- برایشان تست بنویس.
+پیش‌نویس‌های docs/wip به `app/` منتقل و وصل شدند:
+- `app/features.py`: کلیدهای فیچر در `SETTINGS["features"]`. **هر فیچر جدید یک کلید اینجا بگیرد.** بازیابی با `restore_features`.
+- `app/permissions.py`: `roles_of`، `PERMS`، `can()`. برای قابلیت جدید یک مجوز تعریف کن و با `can()` چک کن.
+  `AclMiddleware` (روی `dp.callback_query`) پیشوندهای `CALLBACK_ACL` را مرکزی می‌بندد؛ پیشوند callback ادمینی جدید را آنجا اضافه کن.
+- `app/audit.py`: `ActorMiddleware` (روی `dp.update`) انجام‌دهنده را ست می‌کند. تابع جدیدی که دارایی شهر را عوض می‌کند `@audited("عنوان")` بگیرد.
+  کارهای پلیر ثبت نمی‌شوند؛ فقط ادمین/سیستم. ۳۰ مورد آخر قابل برگشت‌اند.
+- `app/approvals.py`: تایید دونفره (حذف شهر/بازیابی/واگذاری). کار حساس جدید: `needs_approval()` و `request_approval()` + یک شاخه در `execute()`.
+- ثبت middlewareها در `app/handlers/__init__.py`.
+- هندلر جدید باید در `tests/fixtures/added_handlers.json` ثبت شود (تست ساختار). لایه‌بندی import با `test_import_layers` خودکار چک می‌شود.

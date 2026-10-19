@@ -127,6 +127,20 @@ pending_confirms = {}
 # هر توکن فقط یک‌بار مصرف می‌شود؛ دابل‌کلیک روی «تایید ارتقا» دو بار هزینه کم نمی‌کند
 pending_upgrades = {}
 
+# نقش‌های اضافه که مالک می‌دهد (فعلاً فقط «راوی»): user_id -> ["narrator", ...]
+EXTRA_ROLES = {}
+
+# لاگ ممیزی تغییرات ادمینی: [{id, ts, actor, action, city, note, before?, after_fp?, undone?}]
+AUDIT_LOG = []
+
+# درخواست‌های منتظر تایید مالک (تایید دونفره): id -> {kind, payload, requester, summary, ts, status}
+PENDING_APPROVALS = {}
+# داده‌ی حجیم درخواست‌ها (مثلاً فایل بازیابی) — فقط در حافظه، در بکاپ ذخیره نمی‌شود
+APPROVAL_BLOBS = {}
+
+# نظرسنجی‌های لیدر جناح: poll_id -> {key, side, leader, question, options, votes: {uid: [i]}}
+LEADER_POLLS = {}
+
 backup_state = {"mid": None}
 _backup_flags = {"dirty": False, "running": False}
 _tasks = set()

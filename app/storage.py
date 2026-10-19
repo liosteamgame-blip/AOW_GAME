@@ -13,14 +13,18 @@ from app import state as app_state
 from app.config import ADMIN_ID, BACKUP_CHAT_ID, BACKUP_NAME, DATA_FILE, DIV, MAX_LEADERS, TZ
 from app.loader import bot
 from app.state import (
+    AUDIT_LOG,
     AUTO_CITIES,
     CITY_ASSETS,
     CITY_BUFFS,
     DEFAULT_MERCHANT_LIMITS,
+    EXTRA_ROLES,
     GROUPS,
     LEADERS,
+    LEADER_POLLS,
     MERCHANT_LIMITS,
     MERCHANT_PRICES,
+    PENDING_APPROVALS,
     PENDING_TRADES,
     PLAYER_CODES,
     SETTINGS,
@@ -34,6 +38,7 @@ from app.state import (
     spawn,
 )
 from app.utils import e, fmt_num
+from app.features import restore_features
 from app.players import rebuild_player_links
 
 
@@ -62,6 +67,12 @@ def snapshot():
             str(c): [dict(x) for x in (lst or [])]
             for c, lst in CITY_BUFFS.items()
         },
+        "extra_roles": {str(uid): list(r) for uid, r in EXTRA_ROLES.items() if r},
+        "audit_log": list(AUDIT_LOG),
+        "pending_approvals": {
+            k: dict(v) for k, v in list(PENDING_APPROVALS.items())[-50:]
+        },
+        "leader_polls": {k: dict(v) for k, v in list(LEADER_POLLS.items())[-30:]},
     }
 
 
@@ -113,6 +124,9 @@ def apply_data(raw):
         ):
             if st.get(k) is not None:
                 SETTINGS[k] = str(st[k])
+    # کلیدهای فیچر (dict) و تنظیمات تکمیلی — بکاپ قدیمی بدون آن‌ها هم پیش‌فرض می‌گیرد
+    restore_features(st if isinstance(st, dict) else {})
+    _apply_stage1_data(raw)
     AUTO_CITIES.clear()
     ac = raw.get("auto_cities") or {}
     if isinstance(ac, dict):
@@ -255,6 +269,30 @@ def apply_data(raw):
                 "text": "\n".join(f"{k}: {int(v) if float(v)==int(v) else v}" for k, v in bag.items()),
                 "stats": bag,
             }
+
+
+def _apply_stage1_data(raw):
+    """نقش‌های اضافه، لاگ ممیزی، تاییدهای معلق و نظرسنجی‌های لیدر."""
+    EXTRA_ROLES.clear()
+    for k, roles in (raw.get("extra_roles") or {}).items():
+        try:
+            uid = int(k)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(roles, list):
+            clean = [str(r) for r in roles if r]
+            if clean:
+                EXTRA_ROLES[uid] = clean
+    AUDIT_LOG.clear()
+    AUDIT_LOG.extend(x for x in (raw.get("audit_log") or []) if isinstance(x, dict) and x.get("id"))
+    PENDING_APPROVALS.clear()
+    for k, v in (raw.get("pending_approvals") or {}).items():
+        if isinstance(v, dict):
+            PENDING_APPROVALS[str(k)] = v
+    LEADER_POLLS.clear()
+    for k, v in (raw.get("leader_polls") or {}).items():
+        if isinstance(v, dict):
+            LEADER_POLLS[str(k)] = v
 
 
 def read_local():

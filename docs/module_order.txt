@@ -3,9 +3,12 @@ app.config
 app.loader
 app.state
 app.utils
+app.features
+app.audit
 app.factions
 app.states
 app.players
+app.permissions
 app.gametime
 app.keyboards
 app.storage
@@ -24,6 +27,7 @@ app.economy.merchants
 app.threats
 app.screens
 app.flows
+app.approvals
 app.handlers.alerts
 app.handlers.start
 app.handlers.groups
@@ -46,6 +50,9 @@ app.handlers.confirm
 app.handlers.statement
 app.handlers.trade
 app.handlers.channel_buttons
+app.handlers.admin_features
+app.handlers.leader_panel
+app.handlers.commander
 app.handlers.fallback
 app.scheduler
 app.bootstrap
