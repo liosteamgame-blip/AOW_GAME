@@ -52,7 +52,8 @@ def get_main_menu_keyboard(user_id=None, chat_id=None):
         extra.append(_btn("🤝 اختیارات کمکی‌ها", "asst:menu"))
     if extra:
         builder.row(*extra)
-    builder.row(_btn("📘 راهنما", "guide:show"), _btn("🔙 بستن منو", "menu:close"))
+    builder.row(_btn("📘 راهنما", "guide:show"))
+    builder.row(_btn("✖️ بستن منو", "menu:close"))
     return builder.as_markup()
 
 
@@ -94,14 +95,16 @@ def get_economy_menu_keyboard(user_id=None):
             _btn("🗡 اقتدار / مشروعیت", "eco:politics", "primary"),
             _btn("🎛 باف/نرف آپ", "eco:buffpick", "primary"),
         )
-        if enabled("my_rank"):
-            builder.row(_btn("🏆 رتبه من", "eco:rank", "success"))
     if user_id and is_admin(user_id):
         builder.row(
             _btn("✏️ ویرایش دارایی", "menu:asset_edit", "danger"),
             _btn("🛒 شاپ", "eco:shop_admin", "primary"),
         )
-    builder.row(_btn("❓ راهنما", "eco:help"), _btn("🔙 بازگشت", "menu:home"))
+    if user_id and enabled("my_rank") and (is_leader(user_id) or is_admin(user_id) or is_player(user_id)):
+        builder.row(_btn("🏆 رتبه من", "eco:rank", "success"), _btn("❓ راهنما", "eco:help"))
+    else:
+        builder.row(_btn("❓ راهنما", "eco:help"))
+    builder.row(_btn("🔙 بازگشت", "menu:home"))
     return builder.as_markup()
 
 
@@ -169,7 +172,7 @@ def get_country_keyboard(field: str, user_id: int | None = None, kind: str | Non
     if other:
         builder.row(_btn(f"🏙 سایر ({len(other)})", f"cityfac:{field}:other"))
     builder.row(_btn("✍️ ورود دستی", f"citymanual:{field}", "primary"))
-    builder.row(_btn("🔙 بازگشت به منو", "menu:home"))
+    builder.row(_btn("🏠 منوی اصلی", "menu:home"))
     return builder.as_markup()
 
 
@@ -216,57 +219,35 @@ def get_cities_keyboard(field: str, faction: str = None, page: int = 0, per_page
         nav.append(_btn("▶️", f"citypage:{field}:{faction}:{page + 1}"))
     if nav:
         builder.row(*nav)
-    builder.row(_btn("🔙 انتخاب کشور", f"cityfacback:{field}"))
     builder.row(_btn("✍️ ورود دستی", f"citymanual:{field}", "primary"))
+    builder.row(_btn("🔙 انتخاب کشور", f"cityfacback:{field}"))
     builder.row(_btn("🏠 منوی اصلی", "menu:home"))
     return builder.as_markup()
 
 
 def get_admin_inline_keyboard():
-    """منوی ادمین فشرده."""
+    """منوی ادمین — گروه‌بندی‌شده و دوستونه؛ خروج همیشه آخرین ردیف و تکی."""
     builder = InlineKeyboardBuilder()
-    builder.row(_btn("📨 ارسال پیام", "adm_msg", "primary"))
-    builder.row(
-        _btn("⏰ تایم‌استارت/استاپ", "adm_timing", "success"),
-        _btn("🛒 لیست تجار", "adm_merchant", "primary"),
-    )
-    builder.row(
-        _btn("👑 لیدرها", "adm_leaders"),
-        _btn("📦 دارایی", "adm_assets"),
-    )
-    builder.row(
-        _btn("🏆 لیدربورد", "adm_leaderboard", "success"),
-        _btn("📊 آمار شهرها", "adm_stats"),
-    )
-    builder.row(
-        _btn("🤖 شهرهای اتو", "adm_auto", "success"),
-        _btn("♻️ اجرای آپ", "adm_run_up", "primary"),
-    )
-    builder.row(
-        _btn("🎛 باف/نرف", "adm_buffs", "primary"),
-        _btn("🛒 تجارت‌های معلق", "adm_pending_trades", "success"),
-    )
-    builder.row(
-        _btn("⬆️ افزایش سطح رایگان", "adm_free_lv", "success"),
-    )
-    builder.row(
-        _btn("🏙 واگذاری شهر", "adm_transfer", "danger"),
-        _btn("🖼 عکس منو", "adm_photo:menu", "primary"),
-    )
-    builder.row(
-        _btn("🧪 فیچرها", "adm_features", "primary"),
-        _btn("📜 لاگ ممیزی", "adm_audit"),
-    )
-    builder.row(
-        _btn("🎭 نقش‌ها", "adm_roles"),
-        _btn("🔐 تاییدهای معلق", "adm_approvals"),
-    )
-    builder.row(_btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"), _btn("📖 وقایع‌نامه", "chr:menu"))
-    builder.row(_btn("🌍 رویداد جهانی", "ev:menu", "primary"), _btn("📊 داشبورد زنده", "dash:menu"))
-    builder.row(_btn("🗓 آپ زمان‌بندی", "upsch:menu"), _btn("🧭 آمادگی شروع", "adm_ready", "success"))
-    builder.row(_btn("📘 راهنمای بازیکن", "adm_guide"))
-    builder.row(_btn("⚙️ مدیریت", "adm_manage"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
-    builder.row(_btn("📋 وضعیت", "adm_report"), _btn("❓ راهنما", "adm_help"))
+    # پیام و زمان‌بندی
+    builder.row(_btn("📨 ارسال پیام", "adm_msg", "primary"), _btn("📢 پیام آپدیت گروه‌ها", "adm_send_update"))
+    builder.row(_btn("⏰ تایم استارت/استاپ", "adm_timing", "success"), _btn("🗓 آپ زمان‌بندی", "upsch:menu"))
+    builder.row(_btn("♻️ اجرای آپ", "adm_run_up", "primary"), _btn("🤖 شهرهای اتو", "adm_auto", "success"))
+    # اقتصاد
+    builder.row(_btn("📦 دارایی", "adm_assets", "primary"), _btn("⬆️ افزایش سطح رایگان", "adm_free_lv", "success"))
+    builder.row(_btn("🎛 باف/نرف", "adm_buffs", "primary"), _btn("🌍 رویداد جهانی", "ev:menu", "primary"))
+    builder.row(_btn("🛒 لیست تجار", "adm_merchant", "primary"), _btn("🐪 تجارت‌های معلق", "adm_pending_trades", "success"))
+    # بازیکن‌ها و نقش‌ها
+    builder.row(_btn("👑 لیدرها", "adm_leaders"), _btn("🏴 پنل جناح‌ها", "ldr:menu", "primary"))
+    builder.row(_btn("🎭 نقش‌ها", "adm_roles"), _btn("🔐 تاییدهای معلق", "adm_approvals"))
+    builder.row(_btn("🏙 واگذاری شهر", "adm_transfer", "danger"), _btn("⚙️ مدیریت", "adm_manage"))
+    # گزارش‌ها
+    builder.row(_btn("🏆 لیدربورد", "adm_leaderboard", "success"), _btn("📈 آمار شهرها", "adm_stats"))
+    builder.row(_btn("📊 داشبورد زنده", "dash:menu"), _btn("📖 وقایع‌نامه", "chr:menu"))
+    builder.row(_btn("📋 وضعیت", "adm_report"), _btn("📜 لاگ ممیزی", "adm_audit"))
+    # راه‌اندازی
+    builder.row(_btn("🧭 آمادگی شروع", "adm_ready", "success"), _btn("🧪 فیچرها", "adm_features", "primary"))
+    builder.row(_btn("🖼 عکس منو", "adm_photo:menu", "primary"), _btn("📘 راهنمای بازیکن", "adm_guide"))
+    builder.row(_btn("❓ راهنمای پنل", "adm_help"))
     builder.row(_btn("🚪 خروج", "adm_logout", "danger"))
     return builder.as_markup()
 
@@ -356,7 +337,7 @@ def get_group_inquiry_keyboard(chat_id: int, city: str, player_ids: list):
     for uid in player_ids:
         builder.row(_btn(f"❌ حذف فرمانده {uid}", f"inq_delplayer:{uid}", "danger"))
     builder.row(_btn("🗑 قطع اتصال گروه از شهر", f"inq_unlink:{chat_id}", "danger"))
-    builder.row(_btn("🔙 بستن", "inq_close"))
+    builder.row(_btn("✖️ بستن", "inq_close"))
     return builder.as_markup()
 
 
@@ -379,8 +360,10 @@ def _timing_menu_keyboard():
     builder = InlineKeyboardBuilder()
     has_ps = "✅" if SETTINGS.get("photo_start") else "➕"
     has_pe = "✅" if SETTINGS.get("photo_stop") else "➕"
-    builder.row(_btn(f"{has_ps} عکس استارت", "adm_photo:start", "primary"))
-    builder.row(_btn(f"{has_pe} عکس استاپ", "adm_photo:stop", "primary"))
+    builder.row(
+        _btn(f"{has_ps} عکس استارت", "adm_photo:start", "primary"),
+        _btn(f"{has_pe} عکس استاپ", "adm_photo:stop", "primary"),
+    )
     builder.row(_btn("📝 ویرایش متن/ساعت", "adm_timing_edit", "success"))
     builder.row(
         _btn("📢 ارسال استارت به گروه‌ها", "adm_broadcast_ts:start", "success"),

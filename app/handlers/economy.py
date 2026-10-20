@@ -140,7 +140,7 @@ async def handle_economy_extra(callback: types.CallbackQuery, state: FSMContext)
             )
         for i, name in enumerate(locked):
             builder.row(_btn(f"🔓 {name}", f"unlock:do:{i}", "success"))
-        builder.row(_btn("🔙", "menu:economy"))
+        builder.row(_btn("🔙 بازگشت", "menu:economy"))
         return await callback.message.answer(
             f"🔓 <b>بازکردن قفل — {e(city)}</b>\n{DIV}\n"
             "هزینه ≈ یک سطح ساخت (قوانین). پس از آنلاک، ارتقا و آپ مجاز است.",
@@ -421,7 +421,7 @@ async def handle_upgrade_nav(callback: types.CallbackQuery, state: FSMContext):
             if lv <= max(aff, 1):
                 c = format_cost_dict(cost_for_levels(name, lv, city=city))
                 builder.row(_btn(f"+{lv} سطح · {c[:40]}", f"upg:do:{sec}:{idx}:{lv}", "success"))
-        builder.row(_btn("🔙", f"upg:sec:{sec}"))
+        builder.row(_btn("🔙 بازگشت", f"upg:sec:{sec}"))
         sheet = get_city_asset_text(city) or ""
         cur = guess_current_level(name, bag, sheet)
         cur_s = str(cur) if cur is not None else "?"
@@ -583,7 +583,7 @@ async def handle_aedit_menu(callback: types.CallbackQuery, state: FSMContext):
             "بازدهی آپ همان عدد جلوی کمپ است؛ اگر خالی باشد پیش‌فرض دسته اعمال می‌شود."
         )
         builder = InlineKeyboardBuilder()
-        builder.row(_btn("🔙", "menu:asset_edit"))
+        builder.row(_btn("🔙 بازگشت", "menu:asset_edit"))
         await callback.message.answer("\n".join(lines), reply_markup=builder.as_markup())
         return
 
