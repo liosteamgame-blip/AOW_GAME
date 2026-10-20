@@ -17,7 +17,7 @@ from app.keyboards import get_admin_inline_keyboard, get_main_menu_keyboard  # n
 from app.economy.sheet import (  # noqa: E402
     _parse_shop_from_sheet, _patch_sheet_level_yield, extract_asset_stats, set_city_asset,
 )
-from app.economy.up import run_weekly_up_for_city  # noqa: E402
+from app.economy.up import repair_winchester_v211, run_weekly_up_for_city  # noqa: E402
 from app.economy.upflow import run_up_all  # noqa: E402
 from app.economy.views import format_city_asset_view  # noqa: E402
 
@@ -237,12 +237,70 @@ class UpTests(Base):
         self.assertTrue(log.startswith("✅"), log)
         self.assertEqual(stats()["شمشیرزن"], 30250)
 
-    async def test_ratio_guard_for_resources(self):
-        set_city_asset(WIN, SHEET.replace("| چوب بری | (1) : 100", "| چوب بری | (1) : 2000")
-                       + "\n|🪵|~| چوب | : 100")
-        log = run_weekly_up_for_city(WIN, force=True)
+    def _wood(self, stock, yld):
+        set_city_asset(WIN, SHEET.replace("| چوب بری | (1) : 100", f"| چوب بری | (1) : {yld}")
+                       + f"\n|🪵|~| چوب | : {stock}")
+        return run_weekly_up_for_city(WIN, force=True)
+
+    async def test_resource_guard_thresholds(self):
+        # موجودی کم اولیه (≤ ۱۰۰) قفل نمی‌کند — مثل سنگ ۱۰ و معدن ۱۰۰
+        self.assertTrue(self._wood(10, 100).startswith("✅"))
+        self.assertTrue(self._wood(100, 2000).startswith("✅"))
+        # موجودی > ۱۰۰ و بازدهی > ۱۰× → توقف
+        log = self._wood(150, 2000)
         self.assertTrue(log.startswith("⏸"), log)
         self.assertIn("چوب", log)
+        # بازدهی > ۳۰۰۰ همیشه توقف
+        self.assertTrue(self._wood(10, 3500).startswith("⏸"))
+
+    async def test_troop_ratio_guard(self):
+        set_city_asset(WIN, SHEET.replace("| سواره‌نظام زره پوش | : 75", "| سواره‌نظام زره پوش | : 60")
+                       .replace("| سواره‌نظام زره پوش | (1) : 50", "| سواره‌نظام زره پوش | (1) : 700"))
+        log = run_weekly_up_for_city(WIN, force=True)
+        self.assertTrue(log.startswith("⏸"), log)
+        self.assertIn("سواره‌نظام زره پوش", log)
+
+    async def test_manual_yield_offset_survives_sheet_and_up(self):
+        set_city_asset(WIN, SHEET)
+        state.GROUPS[GROUP]["city"] = WIN
+        await self.send(message(ADMIN, "ویرایش دارایی بازدهی شبه نظامی +200", chat_id=GROUP, chat_type="supergroup"))
+        self.assertEqual(state.CITY_ASSETS[WIN]["yields"]["شبه نظامی"], 700)
+        set_city_asset(WIN, SHEET)   # ثبت دوباره‌ی شیت
+        self.assertEqual(state.CITY_ASSETS[WIN]["yields"]["شبه نظامی"], 700)
+        apply_data(snapshot())       # ری‌استارت
+        self.assertEqual(state.CITY_ASSETS[WIN]["manual_yield_offsets"], {"شبه نظامی": 200})
+        run_weekly_up_for_city(WIN, force=True)
+        self.assertEqual(stats()["شبه نظامی"], 300 + 700)
+        self.assertEqual(state.CITY_ASSETS[WIN]["yields"]["شبه نظامی"], 700)
+
+    async def test_winchester_repair_once(self):
+        state.SETTINGS["fix_winchester_v211"] = ""
+        set_city_asset(WIN, SHEET + "|💣|-| توپ سبک | : 755\n")
+        stats().update({"شبه نظامی": 37800, "شمشیرزن": 30250, "سواره‌نظام زره پوش": 5075})
+        state.CITY_ASSETS[WIN]["levels"]["نیزه دار"] = 250
+        changed = repair_winchester_v211()
+        self.assertEqual(len(changed), 4)
+        self.assertEqual(stats()["شبه نظامی"], 300)
+        self.assertEqual(stats()["شمشیرزن"], 250)
+        self.assertEqual(stats()["سواره‌نظام زره پوش"], 75)
+        self.assertEqual(stats()["توپ سبک"], 5)
+        self.assertEqual(stats()["سربازان"], 625)
+        self.assertNotIn("نیزه دار", state.CITY_ASSETS[WIN]["levels"])
+        self.assertIn("| شبه نظامی | : 300", state.CITY_ASSETS[WIN]["text"])
+        self.assertEqual(state.SETTINGS["fix_winchester_v211"], "done")
+        # دفعه‌ی دوم (ری‌استارت بعدی) هیچ کاری نمی‌کند
+        stats()["شبه نظامی"] = 9999
+        self.assertEqual(repair_winchester_v211(), [])
+        self.assertEqual(stats()["شبه نظامی"], 9999)
+        state.SETTINGS["fix_winchester_v211"] = ""
+
+    async def test_winchester_repair_leaves_normal_values(self):
+        state.SETTINGS["fix_winchester_v211"] = ""
+        set_city_asset(WIN, SHEET)
+        stats()["شبه نظامی"] = 800   # آپ عادی (۳۰۰ + ۵۰۰) — دست نخورد
+        self.assertEqual(repair_winchester_v211(), [])
+        self.assertEqual(stats()["شبه نظامی"], 800)
+        state.SETTINGS["fix_winchester_v211"] = ""
 
 
 class UpFlowTests(Base):

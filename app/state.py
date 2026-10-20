@@ -141,7 +141,7 @@ def purge_junk_asset_keys() -> dict:
         if not isinstance(entry, dict):
             continue
         gone = []
-        for field in ("stats", "yields", "levels", "shop"):
+        for field in ("stats", "yields", "levels", "shop", "manual_yield_offsets"):
             bag = entry.get(field)
             if not isinstance(bag, dict):
                 continue

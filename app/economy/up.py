@@ -16,14 +16,17 @@ from app.features import setting
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE, UP_YIELD_DEST
 from app.economy.sheet import (
     VALID_RESOURCES,
+    WAREHOUSE_RESOURCES,
     _annotate_yield_pct,
     _apply_stock_to_sheet,
     _parse_shop_from_sheet,
     _sum_force_soldiers,
     extract_asset_stats,
     get_city_asset_stats,
+    manual_offsets,
     normalize_stats_keys,
     sane_levels,
+    with_manual_offsets,
 )
 from app.economy.costs import count_army_soldiers
 from app.economy.assets import _append_change, apply_stat_delta, is_auto_city, is_building_locked
@@ -43,6 +46,7 @@ def _make_asset_snap(entry: dict) -> dict:
         "disabled": list(entry.get("disabled") or []),
         "roll_yields": dict(entry.get("roll_yields") or {}),
         "roll_buffs": list(entry.get("roll_buffs") or []),
+        "manual_yield_offsets": dict(entry.get("manual_yield_offsets") or {}),
         "changes": list(entry.get("changes") or [])[-30:],
         "ts": datetime.now(TZ).strftime("%Y-%m-%d %H:%M") if TZ else datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
@@ -109,6 +113,7 @@ def restore_city_up(city: str, use_history: int = 0) -> tuple:
         "disabled": list(snap.get("disabled") or []),
         "roll_yields": dict(snap.get("roll_yields") or {}),
         "roll_buffs": list(snap.get("roll_buffs") or []),
+        "manual_yield_offsets": dict(snap.get("manual_yield_offsets") or {}),
         "changes": list(snap.get("changes") or []),
     }
     _append_change(city, f"بازگردانی آپ ({snap.get('ts') or '—'})")
@@ -130,6 +135,51 @@ def snapshot_all_assets(reason: str = "manual") -> int:
     return n
 
 
+# اصلاح یک‌باره‌ی وینچستر: موجودی نیروها قبل از آپ خراب v2.1 (لول خراب × بازدهی جدول)
+WINCHESTER_CITY = "winchester_parliamentarian"
+WINCHESTER_GOOD_STOCK = {
+    "شبه نظامی": 300,
+    "شمشیرزن": 250,
+    "سواره‌نظام زره پوش": 75,
+    "توپ سبک": 5,
+}
+
+
+@audited("اصلاح موجودی وینچستر (v2.1.1)")
+def repair_winchester_v211(city: str = WINCHESTER_CITY) -> list:
+    """
+    فقط یک‌بار (پرچم fix_winchester_v211): نیرویی که بیش از ۱۰ برابر مقدار درست است
+    به مقدار قبل از باگ برمی‌گردد؛ لول‌های غیرممکن هم پاک می‌شوند. خروجی: خطوط تغییر.
+    اگر شهر هنوز لود نشده باشد، پرچم نمی‌خورد تا در استارت بعدی دوباره امتحان شود.
+    """
+    if setting("fix_winchester_v211") == "done":
+        return []
+    entry = CITY_ASSETS.get(city)
+    if not entry:
+        return []
+    st = dict(entry.get("stats") or {})
+    changed = []
+    for unit, good in WINCHESTER_GOOD_STOCK.items():
+        try:
+            cur = float(st.get(unit) or 0)
+        except (TypeError, ValueError):
+            continue
+        if cur > good * 10:
+            st[unit] = float(good)
+            changed.append(f"{unit}: {fmt_num(cur)} → {fmt_num(good)}")
+    if changed:
+        st["سربازان"] = float(_sum_force_soldiers(st))
+        entry["stats"] = st
+        entry["text"] = _apply_stock_to_sheet(entry.get("text") or "", st)
+    entry["levels"] = sane_levels(entry.get("levels") or {})
+    CITY_ASSETS[city] = entry
+    if changed:
+        _append_change(city, "اصلاح باگ آپ v2.1: " + "، ".join(changed))
+    app_state.SETTINGS["fix_winchester_v211"] = "done"
+    save_data(critical=True)
+    return changed
+
+
 # پیشوند نتیجه‌ی آپ متوقف‌شده (عدد مشکوک) — منتظر تأیید ادمین؛ هیچ تغییری اعمال نشده
 UP_HOLD = "⏸"
 
@@ -144,11 +194,13 @@ def _setting_float(key: str, default: float) -> float:
 def suspicious_deltas(deltas: dict, bag: dict) -> list:
     """
     بازدهی‌های غیرعادی آپ (مثل +۳۷٬۵۰۰ شبه‌نظامی از لول خراب ۲۵۰):
-    • نیرو: بیش از up_guard_troop_max (پیش‌فرض ۵۰۰۰)
-    • نیرو/منبع انبار: بیش از up_guard_ratio برابر موجودی فعلی (پیش‌فرض ۱۰×؛ برای موجودی ≥ ۵۰)
-    سکه/غذا/جمعیت گردش بزرگ عادی دارند و فقط با سقف نیرو چک نمی‌شوند.
+    • نیرو: بازدهی > up_guard_troop_max (۵۰۰۰) یا (موجودی > ۵۰ و بازدهی > ratio× موجودی)
+    • منبع انبار: بازدهی > up_guard_res_max (۳۰۰۰) یا (موجودی > ۱۰۰ و بازدهی > ratio× موجودی)
+    موجودی کم اولیه (مثلاً سنگ ۱۰ و معدن ۱۰۰) آپ را قفل نمی‌کند.
+    سکه/غذا/جمعیت/اسب گردش بزرگ عادی دارند و چک نمی‌شوند.
     """
     troop_max = _setting_float("up_guard_troop_max", 5000)
+    res_max = _setting_float("up_guard_res_max", 3000)
     ratio = _setting_float("up_guard_ratio", 10)
     out = []
     for k, dv in deltas.items():
@@ -159,11 +211,15 @@ def suspicious_deltas(deltas: dict, bag: dict) -> list:
             continue
         if dv <= 0:
             continue
-        troop = k not in VALID_RESOURCES
-        if troop and troop_max > 0 and dv > troop_max:
-            out.append(f"{k}: {fmt_num(old)} → +{fmt_num(dv)} (بیش از سقف {fmt_num(troop_max)} نیرو)")
-        elif (ratio > 0 and old >= 50 and dv > ratio * old
-              and k not in ("سکه", "غذا", "جمعیت")):
+        if k in WAREHOUSE_RESOURCES:
+            cap, min_stock, label = res_max, 100, "منبع"
+        elif k not in VALID_RESOURCES:
+            cap, min_stock, label = troop_max, 50, "نیرو"
+        else:
+            continue
+        if cap > 0 and dv > cap:
+            out.append(f"{k}: {fmt_num(old)} → +{fmt_num(dv)} (بیش از سقف {fmt_num(cap)} {label})")
+        elif ratio > 0 and old > min_stock and dv > ratio * old:
             out.append(f"{k}: {fmt_num(old)} → +{fmt_num(dv)} (بیش از {fmt_num(ratio)}× موجودی)")
     return out
 
@@ -205,6 +261,7 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
             raw_ex = extract_asset_stats(sheet_text)
             levels_ex = dict(raw_ex.pop("__levels__", {}) or {})
             disabled_ex = list(raw_ex.pop("__disabled__", []) or [])
+            sheet_y = {}   # بازدهی‌های خوانده‌شده از شیت (بدون آفست دستی)
             for k, v in list(raw_ex.items()):
                 if str(k).startswith("__"):
                     continue
@@ -213,9 +270,7 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
                 except (TypeError, ValueError):
                     continue
                 if str(k).startswith("yield:"):
-                    ymap_sheet = entry.setdefault("yields", {})
-                    ymap_sheet[str(k)[6:]] = fv
-                    entry["yields"] = ymap_sheet
+                    sheet_y[str(k)[6:]] = fv
                     continue
                 st = entry.setdefault("stats", {})
                 if k in FORCE_UNIT_NAMES or k in (SPECIAL_UNITS or {}):
@@ -234,9 +289,7 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
                         "بازدهی آشپزخانه": "آشپزخانه",
                         "بازدهی دهکده": "دهکده",
                     }.get(k, k.replace("بازدهی", "").strip())
-                    ymap_sheet = entry.setdefault("yields", {})
-                    ymap_sheet[bname] = fv
-                    entry["yields"] = ymap_sheet
+                    sheet_y[bname] = fv
                 _econ = {
                     "خزانه", "بندر", "تجارتخانه", "آشپزخانه", "دهکده", "اصطبل",
                     "چوب بری", "معدن سنگ", "معدن آهن", "پوشاک سازی", "باروت سازی",
@@ -247,15 +300,18 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
                     and bname != "سکه"
                     and not str(k).startswith("بازدهی")
                 ):
-                    ymap_sheet = entry.setdefault("yields", {})
-                    ymap_sheet[bname] = fv
-                    entry["yields"] = ymap_sheet
+                    sheet_y[bname] = fv
             lv = sane_levels(entry.get("levels") or {})
             lv.update(levels_ex)
             entry["levels"] = lv
-            entry["yields"] = {
-                k: v for k, v in (entry.get("yields") or {}).items() if not is_junk_key(k)
-            }
+            # کلیدهای شیت = عدد شیت + آفست دستی؛ کلیدهای بیرون از شیت همان مقدار قبلی (آفست را دارند)
+            offsets = manual_offsets(entry)
+            ymap_new = {k: v for k, v in (entry.get("yields") or {}).items() if not is_junk_key(k)}
+            ymap_new.update(with_manual_offsets(
+                {k: v for k, v in sheet_y.items() if not is_junk_key(k)},
+                {k: off for k, off in offsets.items() if k in sheet_y},
+            ))
+            entry["yields"] = ymap_new
             if disabled_ex:
                 entry["disabled"] = disabled_ex
             CITY_ASSETS[city] = entry

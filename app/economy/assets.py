@@ -171,6 +171,7 @@ def apply_stat_delta(city: str, deltas: dict, note: str = "") -> str:
         "disabled": list(entry.get("disabled") or []),
         "roll_yields": dict(entry.get("roll_yields") or {}),
         "roll_buffs": list(entry.get("roll_buffs") or []),
+        "manual_yield_offsets": dict(entry.get("manual_yield_offsets") or {}),
         "trade_cap_used": entry.get("trade_cap_used") or 0,
     }
     if note or lines_log:
@@ -585,6 +586,7 @@ def apply_upgrade_levels(city: str, name: str, levels: int, force: bool = False)
         "disabled": list(entry.get("disabled") or []),
         "roll_yields": dict(entry.get("roll_yields") or {}),
         "roll_buffs": list(entry.get("roll_buffs") or []),
+        "manual_yield_offsets": dict(entry.get("manual_yield_offsets") or {}),
         "trade_cap_used": entry.get("trade_cap_used") or 0,
     }
     cost_txt = format_cost_dict(cd)

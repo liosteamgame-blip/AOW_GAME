@@ -11,6 +11,37 @@ from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE
 VALID_RESOURCES = frozenset({
     "سکه", "غذا", "چوب", "سنگ", "آهن", "پوشاک", "باروت", "جمعیت", "اسب",
 })
+# منابع انبار (ظرفیت انبار را پر می‌کنند)
+WAREHOUSE_RESOURCES = frozenset({"چوب", "سنگ", "آهن", "پوشاک", "باروت"})
+# آفست دستی ادمین روی بازدهی («ویرایش دارایی بازدهی X +200»): name → جمع تغییرات.
+# yields از شیت بازسازی می‌شود؛ این آفست‌ها روی خروجی شیت اعمال می‌شوند تا با ثبت شیت جدید نپرند.
+MANUAL_YIELDS = "manual_yield_offsets"
+
+
+def manual_offsets(entry: dict) -> dict:
+    out = {}
+    for k, v in ((entry or {}).get(MANUAL_YIELDS) or {}).items():
+        try:
+            off = float(v)
+        except (TypeError, ValueError):
+            continue
+        if off and not is_junk_key(k):
+            out[k] = off
+    return out
+
+
+def with_manual_offsets(yields: dict, offsets: dict) -> dict:
+    """بازدهی شیت + آفست دستی ادمین (هرگز منفی نمی‌شود)."""
+    out = dict(yields or {})
+    for k, off in (offsets or {}).items():
+        try:
+            base = float(out.get(k) or 0)
+        except (TypeError, ValueError):
+            base = 0.0
+        out[k] = max(0.0, base + off)
+    return out
+
+
 def max_level_of(name: str) -> int:
     """سقف لول ساختمان/کمپ طبق جدول ارتقا (۰ = نامعلوم/بی‌سقف)."""
     try:
@@ -485,7 +516,8 @@ def set_city_asset(city: str, text: str):
     shop = _parse_shop_from_sheet(text)
     # بازسازی کامل از شیت فعلی — قبلاً با مقادیر قبلی merge می‌شد و کلیدهای یتیم/خراب ماندگار بودند
     merged_lv = sane_levels(levels_ex)
-    merged_y = {k: v for k, v in yields_ex.items() if not is_junk_key(k)}
+    offsets = manual_offsets(prev)
+    merged_y = with_manual_offsets({k: v for k, v in yields_ex.items() if not is_junk_key(k)}, offsets)
     # تعداد سربازان = جمع لیست نیرو (بات خودش جمع می‌کند)
     _force_sum = _sum_force_soldiers(stats)
     if _force_sum > 0:
@@ -499,6 +531,7 @@ def set_city_asset(city: str, text: str):
         "levels": merged_lv,
         "disabled": disabled,
         "shop": shop,
+        MANUAL_YIELDS: offsets,
     }
     return stats
 

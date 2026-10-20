@@ -631,11 +631,14 @@ async def handle_asset_formula_edit(message: types.Message):
         entry = CITY_ASSETS.setdefault(city, {"text": "", "stats": {}, "yields": {}})
         stats = normalize_stats_keys(dict(entry.get("stats") or {}))
         ymap = dict(entry.get("yields") or {})
+        # آفست جدا نگه داشته می‌شود تا با بازسازی yields از شیت (ثبت شیت/آپ) نپرد
+        offsets = dict(entry.get("manual_yield_offsets") or {})
         ylog = []
         for k, dlt in yield_deltas.items():
             old_y = float(ymap.get(k) or stats.get(k) or 0)
             new_y = max(0, old_y + dlt)
             ymap[k] = new_y
+            offsets[k] = float(offsets.get(k) or 0) + (new_y - old_y)
             if k not in (
                 "شبه نظامی", "شمشیرزن", "نیزه دار", "رایفلدار", "افسر",
                 "سواره نظام شمشیرزن", "سواره‌نظام زره پوش", "سواره‌نظام تفنگدار",
@@ -647,6 +650,7 @@ async def handle_asset_formula_edit(message: types.Message):
             ylog.append(f"بازدهی {k}: {fmt_num(old_y)} → {fmt_num(new_y)} ({fmt_num(dlt, signed=True)})")
         entry["stats"] = stats
         entry["yields"] = ymap
+        entry["manual_yield_offsets"] = {k: v for k, v in offsets.items() if v}
         CITY_ASSETS[city] = entry
         save_data(critical=True)
         parts_out.append("<b>بازدهی (از آپ بعد):</b>\n" + "\n".join(ylog))

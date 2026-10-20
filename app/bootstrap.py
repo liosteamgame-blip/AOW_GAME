@@ -8,6 +8,7 @@ from app import state as app_state
 from app.art import load_art
 from app.config import ADMIN_ID, CHANNEL_ID
 from app.factions import migrate_city_names, seed_default_cities
+from app.economy.up import repair_winchester_v211
 from app.keyboards import _btn
 from app.loader import bot, dp
 
@@ -51,6 +52,10 @@ async def main():
     if migrated or seeded:
         save_data(critical=True)
         logging.info("migrate=%s seed=%s", migrated, seeded)
+    # یک‌بار: برگرداندن نیروهای وینچستر که آپ خراب v2.1 نجومی کرده بود
+    win_fix = repair_winchester_v211()
+    if win_fix:
+        logging.warning("اصلاح وینچستر: %s", win_fix)
     # بکاپ فوری بعد از بالا آمدن
     try:
         await push_backup()

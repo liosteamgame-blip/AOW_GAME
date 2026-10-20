@@ -62,7 +62,10 @@ EXTRA_SETTINGS = {
     "up_skip_notified": "",
     # محافظ آپ: بازدهی بیشتر از این برای یک نیرو، یا بیشتر از این ضریبِ موجودی → توقف و تأیید ادمین
     "up_guard_troop_max": "5000",
+    "up_guard_res_max": "3000",
     "up_guard_ratio": "10",
+    # اصلاح یک‌باره‌ی موجودی نیروی وینچستر بعد از باگ آپ v2.1 ("done" = انجام شد)
+    "fix_winchester_v211": "",
     # تقویم قوانین: off | warn | block (پیش‌فرض خاموش) + روزهای مجاز هر درخواست
     "rules_calendar": "off",
     "days_upgrade": RULE_DAYS["upgrade"],
