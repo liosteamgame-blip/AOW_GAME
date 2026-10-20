@@ -281,6 +281,9 @@ def apply_data(raw):
                 "text": "\n".join(f"{k}: {int(v) if float(v)==int(v) else v}" for k, v in bag.items()),
                 "stats": bag,
             }
+    purged = app_state.purge_junk_asset_keys()
+    if purged:
+        logging.warning("کلیدهای زباله‌ی دارایی پاک شد: %s", purged)
 
 
 def _apply_stage1_data(raw):

@@ -60,6 +60,9 @@ EXTRA_SETTINGS = {
     "up_preview_sent": "",
     "up_last_run": "",
     "up_skip_notified": "",
+    # محافظ آپ: بازدهی بیشتر از این برای یک نیرو، یا بیشتر از این ضریبِ موجودی → توقف و تأیید ادمین
+    "up_guard_troop_max": "5000",
+    "up_guard_ratio": "10",
     # تقویم قوانین: off | warn | block (پیش‌فرض خاموش) + روزهای مجاز هر درخواست
     "rules_calendar": "off",
     "days_upgrade": RULE_DAYS["upgrade"],

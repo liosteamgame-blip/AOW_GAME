@@ -2,9 +2,41 @@
 import re
 
 from app.audit import audited
-from app.state import CITY_ASSETS
+from app.state import CITY_ASSETS, is_junk_key
 from app.utils import _clean_item_name, fmt_num, format_goods, normalize_digits, num_plain
-from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS
+from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE
+
+
+# منابع معتبر بازی (هر چیزی غیر از این‌ها و نیروها/ساختمان‌ها در آپ «کلید زباله» است)
+VALID_RESOURCES = frozenset({
+    "سکه", "غذا", "چوب", "سنگ", "آهن", "پوشاک", "باروت", "جمعیت", "اسب",
+})
+def max_level_of(name: str) -> int:
+    """سقف لول ساختمان/کمپ طبق جدول ارتقا (۰ = نامعلوم/بی‌سقف)."""
+    try:
+        return int((UPGRADE_TABLE.get(name) or {}).get("max") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def sane_levels(levels: dict) -> dict:
+    """
+    حذف لول‌های غیرممکن (مثلاً ۲۵۰ برای کمپ شبه‌نظامی با سقف ۱۰ — تعداد نیرو که به‌جای لول خوانده شده).
+    قبلاً همین لول خراب × بازدهی پیش‌فرض جدول = +۳۷٬۵۰۰ نیرو در آپ.
+    """
+    out = {}
+    for k, v in (levels or {}).items():
+        if is_junk_key(k):
+            continue
+        try:
+            lv = int(v)
+        except (TypeError, ValueError):
+            continue
+        mx = max_level_of(k)
+        if lv < 0 or (mx and lv > mx):
+            continue
+        out[k] = lv
+    return out
 
 
 # برچسب‌هایی که در جمع قلمرو نباید بیایند (توضیحی / غیرعددی)
@@ -331,9 +363,13 @@ def extract_asset_stats(text: str) -> dict:
     if stats.get("بازدهی تجارت‌خانه") and not stats.get("تجارتخانه"):
         stats["تجارتخانه"] = stats["بازدهی تجارت‌خانه"]
 
-    out = {k: (int(v) if abs(v - int(v)) < 1e-9 else round(v, 2)) for k, v in stats.items()}
+    out = {
+        k: (int(v) if abs(v - int(v)) < 1e-9 else round(v, 2))
+        for k, v in stats.items()
+        if not is_junk_key(k)
+    }
     # levels را در کلیدهای رزرو نمی‌گذاریم؛ set_city_asset جدا می‌گیرد
-    out["__levels__"] = levels
+    out["__levels__"] = sane_levels(levels)
     out["__disabled__"] = list(disabled)
     return out
 
@@ -428,7 +464,7 @@ def set_city_asset(city: str, text: str):
         else:
             stats[k] = v
     prev = CITY_ASSETS.get(city) or {}
-    # حفظ موجودی نیرو اگر شیت جدید فقط بازدهی کمپ را خواند
+    # حفظ موجودی نیرو فقط اگر شیت جدید اصلاً آن نیرو را ندارد (نه وقتی صریحاً کم/صفر شده)
     prev_st = dict(prev.get("stats") or {})
     try:
         _fn = FORCE_UNIT_NAMES | set((SPECIAL_UNITS or {}).keys())
@@ -441,15 +477,15 @@ def set_city_asset(city: str, text: str):
         except (TypeError, ValueError):
             continue
         yv = float(yields_ex.get(fk) or 0)
-        if new_v <= 0 and old_v > 0:
+        if fk not in stats and old_v > 0:
             stats[fk] = old_v
         elif yv > 0 and abs(new_v - yv) < 0.01 and old_v > new_v:
+            # خط کمپ بدون لول که عددش همان بازدهی است ≠ موجودی
             stats[fk] = old_v
     shop = _parse_shop_from_sheet(text)
-    merged_lv = dict(prev.get("levels") or {})
-    merged_lv.update(levels_ex)
-    merged_y = dict(prev.get("yields") or {})
-    merged_y.update(yields_ex)
+    # بازسازی کامل از شیت فعلی — قبلاً با مقادیر قبلی merge می‌شد و کلیدهای یتیم/خراب ماندگار بودند
+    merged_lv = sane_levels(levels_ex)
+    merged_y = {k: v for k, v in yields_ex.items() if not is_junk_key(k)}
     # تعداد سربازان = جمع لیست نیرو (بات خودش جمع می‌کند)
     _force_sum = _sum_force_soldiers(stats)
     if _force_sum > 0:
@@ -462,7 +498,7 @@ def set_city_asset(city: str, text: str):
         "yields": merged_y,
         "levels": merged_lv,
         "disabled": disabled,
-        "shop": shop or dict(prev.get("shop") or {}),
+        "shop": shop,
     }
     return stats
 
@@ -522,6 +558,27 @@ def _patch_sheet_level_yield(text: str, name: str, new_lv: int, new_yield: float
     y = _fmt_num(new_yield)
     lv = int(new_lv)
 
+    if name in FORCE_UNIT_NAMES or name in (SPECIAL_UNITS or {}):
+        # کمپ نیرو: فقط خطی که پرانتز لول دارد. قبلاً اگر کمپ هنوز خطی در شیت نداشت، خط لیست نیرو
+        # «| نیزه دار | : 120» به «(1) : 100» تبدیل می‌شد → بازدهی جای موجودی می‌نشست.
+        camp = re.compile(
+            rf"(\|[^\n|]*\|[^\n|]*\|\s*{re.escape(name)}\s*\|)[ \t]*"
+            rf"\([^)\n]*\)[ \t]*:?[ \t]*[\d۰-۹.]*",
+            re.I,
+        )
+        nt, n = camp.subn(rf"\1 ({lv}) : {y}", text, count=1)
+        if n:
+            return nt
+        line = f"|⛺|-| {name} | ({lv}) : {y}"
+        idx = _force_list_start(text)
+        if idx < 0:
+            shop = re.search(r"\n\s*💵|\n\s*شاپ\s*:", text)
+            idx = shop.start() + 1 if shop else len(text)
+            if idx == len(text):
+                return text.rstrip("\n") + "\n" + line
+        line_start = text.rfind("\n", 0, idx) + 1
+        return text[:line_start] + line + "\n" + text[line_start:]
+
     # ۱) خط مستقیم نام ساختمان/کمپ (فقط همان خط — \s خط بعد را نخورد)
     pat = re.compile(
         rf"(\|[^\n|]*\|[^\n|]*\|\s*{re.escape(name)}\s*\|)[ \t]*"
@@ -579,13 +636,8 @@ def _patch_sheet_level_yield(text: str, name: str, new_lv: int, new_yield: float
     return nt if n else text
 
 
-def _patch_force_list_counts(text: str, stats: dict, names: tuple) -> str:
-    """
-    موجودی نیرو را فقط در بلوک لیست نیرو (پایین شیت) به‌روز می‌کند.
-    خطوط کمپ پادگان با (لول) دست نمی‌خورند.
-    """
-    if not text:
-        return text
+def _force_list_start(text: str) -> int:
+    """شروع بلوک لیست نیرو (پایین شیت)؛ -1 = پیدا نشد."""
     idx = -1
     for marker in ("|🛡|", "پیاده‌نظام", "|🐴|~| سوار", "|🌟|~| ویژه", "ناوگان جنگی"):
         j = text.rfind(marker)
@@ -595,6 +647,17 @@ def _patch_force_list_counts(text: str, stats: dict, names: tuple) -> str:
                 break
     if idx < 0:
         idx = text.rfind("پیاده‌نظام")
+    return idx
+
+
+def _patch_force_list_counts(text: str, stats: dict, names: tuple) -> str:
+    """
+    موجودی نیرو را فقط در بلوک لیست نیرو (پایین شیت) به‌روز می‌کند.
+    خطوط کمپ پادگان با (لول) دست نمی‌خورند.
+    """
+    if not text:
+        return text
+    idx = _force_list_start(text)
     if idx < 0:
         return text
     head, tail = text[:idx], text[idx:]
@@ -883,7 +946,7 @@ def _parse_shop_from_sheet(text: str) -> dict:
             c = int(pk.get("count") or 0)
             if un and c > 0 and y <= 0:
                 out[un] = out.get(un, 0) + c
-    return out
+    return {k: v for k, v in out.items() if not is_junk_key(k)}
 
 
 def _parse_shop_packs(text: str) -> list:
@@ -897,9 +960,18 @@ def _parse_shop_packs(text: str) -> list:
     """
     if not text:
         return []
-    m = re.search(r"شاپ\s*:?\s*(.*)$", text, re.I | re.S)
-    block = m.group(1) if m else text
-    lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+    # فقط بخش شاپ (سر خط «شاپ :» یا «💵»). قبلاً بدون این بخش کل شیت پارس می‌شد و
+    # هر خط «(N) : M» (﴿ قلعه﴾، 📥 بازدهی، چوب بری، کمپ‌ها) یک «پک شاپ» می‌شد → نیروی جعلی در آپ.
+    m = (re.search(r"(?m)^[^\S\n]*💵*[^\S\n]*شاپ[^\S\n]*:?", text)
+         or re.search(r"(?m)^[^\S\n]*💵+[^\n]*$", text))
+    if not m:
+        return []
+    block = text[m.end():]
+    lines = [
+        ln.strip() for ln in block.splitlines()
+        # خط جدول/عنوان شیت هیچ‌وقت پک شاپ نیست
+        if ln.strip() and not any(x in ln for x in ("|", "﴿", "﴾"))
+    ]
     packs = []
     i = 0
     while i < len(lines):

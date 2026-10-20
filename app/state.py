@@ -118,6 +118,41 @@ LEADERS = {
 # {"آمیان_فرانسه": {"text": "متن کامل شیت…", "stats": {"خزانه": 9700, "چوب": 380}}}
 # text = همان چیزی که ادمین ست می‌کند؛ stats = اعداد استخراج‌شده برای جمع قلمرو
 CITY_ASSETS = {}
+
+# نشانه‌های عنوان/قالب شیت — نام نیرو/منبع/ساختمان واقعی هیچ‌کدام را ندارد
+# (مثل «🍽 ﴿ قلعه﴾» یا «📥|-| بازدهی» که در v2.1 از پارس اشتباه شاپ وارد دارایی شدند)
+JUNK_KEY_MARKS = ("|", "﴿", "﴾", "📥", "《", "》", "{", "}")
+
+
+def is_junk_key(key) -> bool:
+    s = str(key or "").strip()
+    if s.startswith("yield:"):
+        s = s[6:].strip()
+    return not s or any(m in s for m in JUNK_KEY_MARKS)
+
+
+def purge_junk_asset_keys() -> dict:
+    """
+    پاک‌سازی کلیدهای زباله از stats / yields / levels / shop همه شهرها.
+    بعد از هر بارگذاری داده (دیسک، بکاپ تلگرام، بازیابی) صدا زده می‌شود. خروجی: شهر → کلیدهای حذف‌شده.
+    """
+    removed = {}
+    for city, entry in CITY_ASSETS.items():
+        if not isinstance(entry, dict):
+            continue
+        gone = []
+        for field in ("stats", "yields", "levels", "shop"):
+            bag = entry.get(field)
+            if not isinstance(bag, dict):
+                continue
+            for k in [k for k in bag if is_junk_key(k)]:
+                bag.pop(k, None)
+                gone.append(f"{field}:{k}")
+        if gone:
+            removed[city] = gone
+    return removed
+
+
 # آخرین بکاپ قبل از آپ هر شهر (برای بازگردانی شخصی)
 UP_SNAPSHOTS = {}
 UP_HISTORY_MAX = 2   # تعداد نسخه‌های قدیمی‌تر از latest

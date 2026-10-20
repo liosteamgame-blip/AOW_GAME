@@ -18,7 +18,7 @@ from app.storage import save_data
 from app.economy.assets import is_auto_city
 from app.economy.up import restore_city_up
 from app.castles import castle_trait_line
-from app.economy.upflow import run_up_all, run_up_one, up_all_running, up_one_running
+from app.economy.upflow import is_held, run_up_all, run_up_one, up_all_running, up_one_running
 
 
 @dp.callback_query(F.data == "adm_auto")
@@ -82,7 +82,7 @@ async def admin_run_up_menu(callback: types.CallbackQuery):
     builder.row(_btn("♻️ آپ کلی — همه اتو", "up_all", "success"))
     builder.row(_btn("🏙 آپ تکی — ساید سپس شهر", "up_pick", "primary"))
     builder.row(_btn("⏪ بازگردانی آپ یک شهر", "up_rollback_menu", "danger"))
-    builder.row(_btn("🔙 پنل ادمین", "back_to_admin"))
+    builder.row(_btn("🏠 پنل اصلی", "back_to_admin"))
     auto_n = sum(1 for v in AUTO_CITIES.values() if v)
     snap_n = len(UP_SNAPSHOTS)
     await callback.message.answer(
@@ -122,7 +122,7 @@ async def admin_up_pick(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     for key, (flag, title) in FACTION_META.items():
         builder.row(_btn(f"{flag} {title}", f"up_side:{key}", "primary"))
-    builder.row(_btn("🔙", "adm_run_up"))
+    builder.row(_btn("🔙 بازگشت", "adm_run_up"))
     await callback.message.answer(
         f"🏙 <b>آپ تکی</b> — اول <b>ساید</b> را انتخاب کنید:\n{DIV}",
         reply_markup=builder.as_markup(),
@@ -152,7 +152,7 @@ async def admin_up_side(callback: types.CallbackQuery):
         flag = "🤖" if is_auto_city(c) else "📦"
         short = c.rsplit("_", 1)[0] if "_" in c else c
         builder.row(_btn(f"{flag} {short}", f"up_confirm:{c}"))
-    builder.row(_btn("🔙 سایدها", "up_pick"))
+    builder.row(_btn("🔙 بازگشت به سایدها", "up_pick"))
     title = (FACTION_META.get(side) or ("🏙", side))[1]
     await callback.message.answer(
         f"🏙 <b>آپ تکی — {e(title)}</b>\n{DIV}\n"
@@ -187,15 +187,28 @@ async def admin_up_confirm(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("up_one:"))
 async def admin_up_one(callback: types.CallbackQuery):
+    await _do_up_one(callback, allow_suspicious=False)
+
+
+@dp.callback_query(F.data.startswith("up_force:"))
+async def admin_up_force(callback: types.CallbackQuery):
+    """تأیید ادمین برای آپی که به‌خاطر عدد مشکوک متوقف شده بود."""
+    await _do_up_one(callback, allow_suspicious=True)
+
+
+async def _do_up_one(callback: types.CallbackQuery, allow_suspicious: bool):
     if not is_admin(callback.from_user.id):
         return await callback.answer()
     city = callback.data.split(":", 1)[1]
     if up_one_running(city):
         return await callback.answer("⏳ آپ همین شهر در حال اجراست؛ دوباره نزنید.", show_alert=True)
     # بدنه‌ی run_up_one تا اولین await خودش هم‌زمان اجرا می‌شود → قفل قبل از هر تعویض گرفته می‌شود
-    log = await run_up_one(city)
+    log = await run_up_one(city, allow_suspicious=allow_suspicious)
+    held = is_held(log)
     try:
-        await callback.answer(f"آپ {city} انجام شد" if log else "در حال اجراست")
+        await callback.answer(
+            "⏸ متوقف شد — عدد مشکوک" if held else (f"آپ {city} انجام شد" if log else "در حال اجراست")
+        )
     except Exception:
         pass
     try:
@@ -204,11 +217,22 @@ async def admin_up_one(callback: types.CallbackQuery):
         pass
     if log is None:
         return await callback.message.answer("⏳ آپ همین شهر یا آپ کلی همین الان در حال اجراست.")
+    if held:
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            _btn("⚠️ تأیید و اجرا", f"up_force:{city}", "danger"),
+            _btn("❌ لغو", "up_cancel"),
+        )
+        builder.row(_btn("🏠 پنل اصلی", "back_to_admin"))
+        return await callback.message.answer(
+            f"⏸ <b>آپ متوقف شد — {e(city)}</b>\n{DIV}\n{e(log)}",
+            reply_markup=builder.as_markup(),
+        )
     builder = InlineKeyboardBuilder()
     builder.row(_btn("⏪ بازگردانی این شهر", f"up_rb:{city}", "danger"))
-    builder.row(_btn("🔙 پنل", "back_to_admin"))
+    builder.row(_btn("🏠 پنل اصلی", "back_to_admin"))
     await callback.message.answer(
-        f"♻️ <b>آپ تکی — {e(city)}</b>\n{DIV}\n{log}\n\n🗄 بکاپ قدیم+جدید ذخیره شد",
+        f"♻️ <b>آپ تکی — {e(city)}</b>\n{DIV}\n{e(log)}\n\n🗄 بکاپ قدیم+جدید ذخیره شد",
         reply_markup=builder.as_markup(),
     )
 
@@ -228,7 +252,7 @@ async def admin_up_rollback_menu(callback: types.CallbackQuery):
         ts = (snap or {}).get("ts") or "—"
         short = city.rsplit("_", 1)[0] if "_" in city else city
         builder.row(_btn(f"⏪ {short} ({ts})", f"up_rb:{city}", "danger"))
-    builder.row(_btn("🔙", "adm_run_up"))
+    builder.row(_btn("🔙 بازگشت", "adm_run_up"))
     await callback.message.answer(
         f"⏪ <b>بازگردانی آپ — شخصی هر شهر</b>\n{DIV}\n"
         "با انتخاب، دارایی همان شهر به قبل از آخرین آپ برمی‌گردد.",

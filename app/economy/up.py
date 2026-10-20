@@ -1,18 +1,21 @@
 """آپ هفتگی و بکاپ/بازگردانی آن."""
+import copy
 import logging
 from datetime import datetime
 
 from app import state as app_state
 from app.config import ADMIN_ID, DIV, TZ
 from app.loader import bot
-from app.state import CITY_ASSETS, CITY_BUFFS, UP_HISTORY_MAX, UP_SNAPSHOTS
-from app.utils import e, fmt_num
+from app.state import CITY_ASSETS, CITY_BUFFS, UP_HISTORY_MAX, UP_SNAPSHOTS, is_junk_key
+from app.utils import e, fmt_num, html_cut
 from app.players import groups_of_city, player_ids_for_city
 from app.storage import save_data
 from app.audit import audited
 from app.events import consume_event_buffs
+from app.features import setting
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE, UP_YIELD_DEST
 from app.economy.sheet import (
+    VALID_RESOURCES,
     _annotate_yield_pct,
     _apply_stock_to_sheet,
     _parse_shop_from_sheet,
@@ -20,6 +23,7 @@ from app.economy.sheet import (
     extract_asset_stats,
     get_city_asset_stats,
     normalize_stats_keys,
+    sane_levels,
 )
 from app.economy.costs import count_army_soldiers
 from app.economy.assets import _append_change, apply_stat_delta, is_auto_city, is_building_locked
@@ -126,11 +130,50 @@ def snapshot_all_assets(reason: str = "manual") -> int:
     return n
 
 
+# پیشوند نتیجه‌ی آپ متوقف‌شده (عدد مشکوک) — منتظر تأیید ادمین؛ هیچ تغییری اعمال نشده
+UP_HOLD = "⏸"
+
+
+def _setting_float(key: str, default: float) -> float:
+    try:
+        return float(setting(key) or default)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def suspicious_deltas(deltas: dict, bag: dict) -> list:
+    """
+    بازدهی‌های غیرعادی آپ (مثل +۳۷٬۵۰۰ شبه‌نظامی از لول خراب ۲۵۰):
+    • نیرو: بیش از up_guard_troop_max (پیش‌فرض ۵۰۰۰)
+    • نیرو/منبع انبار: بیش از up_guard_ratio برابر موجودی فعلی (پیش‌فرض ۱۰×؛ برای موجودی ≥ ۵۰)
+    سکه/غذا/جمعیت گردش بزرگ عادی دارند و فقط با سقف نیرو چک نمی‌شوند.
+    """
+    troop_max = _setting_float("up_guard_troop_max", 5000)
+    ratio = _setting_float("up_guard_ratio", 10)
+    out = []
+    for k, dv in deltas.items():
+        try:
+            dv = float(dv)
+            old = float(bag.get(k) or 0)
+        except (TypeError, ValueError):
+            continue
+        if dv <= 0:
+            continue
+        troop = k not in VALID_RESOURCES
+        if troop and troop_max > 0 and dv > troop_max:
+            out.append(f"{k}: {fmt_num(old)} → +{fmt_num(dv)} (بیش از سقف {fmt_num(troop_max)} نیرو)")
+        elif (ratio > 0 and old >= 50 and dv > ratio * old
+              and k not in ("سکه", "غذا", "جمعیت")):
+            out.append(f"{k}: {fmt_num(old)} → +{fmt_num(dv)} (بیش از {fmt_num(ratio)}× موجودی)")
+    return out
+
+
 @audited("آپ هفتگی")
-def run_weekly_up_for_city(city: str, force: bool = False) -> str:
-    """آپ یک شهر + کم کردن شمارنده‌ی رویدادهای جهانی همان شهر (فقط وقتی آپ واقعاً انجام شد)."""
-    log = _run_weekly_up_impl(city, force=force)
-    if not str(log).startswith("⏭"):
+def run_weekly_up_for_city(city: str, force: bool = False, allow_suspicious: bool = False) -> str:
+    """آپ یک شهر + کم کردن شمارنده‌ی رویدادهای جهانی همان شهر (فقط وقتی آپ واقعاً انجام شد).
+    allow_suspicious=True: ادمین عددهای مشکوک را دیده و تأیید کرده است."""
+    log = _run_weekly_up_impl(city, force=force, allow_suspicious=allow_suspicious)
+    if not str(log).startswith(("⏭", UP_HOLD)):
         ended = consume_event_buffs(city)
         if ended:
             save_data(critical=True)
@@ -138,7 +181,7 @@ def run_weekly_up_for_city(city: str, force: bool = False) -> str:
     return log
 
 
-def _run_weekly_up_impl(city: str, force: bool = False) -> str:
+def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool = False) -> str:
     """
     آپ هفتگی — بازدهی‌ها به مقصد مشخص:
     • خزانه+بندر+تجارتخانه → جمع می‌شود و به موجودی سکه خزانه
@@ -150,6 +193,9 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
     """
     if not force and not is_auto_city(city):
         return f"⏭ {city}: اتو نیست"
+    # برای توقف آپ مشکوک: وضعیت قبل از هر تغییر (شامل بکاپ آپ قبلی) دست‌نخورده برگردد
+    before_entry = copy.deepcopy(CITY_ASSETS.get(city))
+    before_snap = copy.deepcopy(UP_SNAPSHOTS.get(city))
     _snapshot_city_assets(city)
     entry = CITY_ASSETS.get(city) or {}
     # شیت = منبع حقیقت برای بازدهی (مثلاً خزانه ۷۰۰۰ نه پیش‌فرض ۱۰۰۰ جدول)
@@ -172,25 +218,12 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
                     entry["yields"] = ymap_sheet
                     continue
                 st = entry.setdefault("stats", {})
-                _force_names = FORCE_UNIT_NAMES | set((SPECIAL_UNITS or {}).keys())
-                if k in _force_names:
-                    # موجودی لیست نیرو — هرگز با بازدهی کمپ جایگزین نشود
-                    try:
-                        old_stock = float(st.get(k) or 0)
-                    except (TypeError, ValueError):
-                        old_stock = 0.0
-                    try:
-                        yv = float((entry.get("yields") or {}).get(k) or 0)
-                    except (TypeError, ValueError):
-                        yv = 0.0
-                    if yv > 0 and abs(fv - yv) < 0.01 and old_stock > fv:
-                        st[k] = old_stock
-                    else:
-                        st[k] = max(old_stock, fv)
-                    entry["stats"] = st
-                else:
-                    st[k] = fv
-                    entry["stats"] = st
+                if k in FORCE_UNIT_NAMES or k in (SPECIAL_UNITS or {}):
+                    # موجودی نیرو: stats منبع حقیقت است (set_city_asset با شیت همگامش کرده).
+                    # قبلاً max(قبلی، شیت) بود → کم شدن نیرو در شیت هیچ‌وقت اعمال نمی‌شد.
+                    continue
+                st[k] = fv
+                entry["stats"] = st
                 bname = k
                 if str(k).startswith("بازدهی"):
                     bname = {
@@ -217,10 +250,12 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
                     ymap_sheet = entry.setdefault("yields", {})
                     ymap_sheet[bname] = fv
                     entry["yields"] = ymap_sheet
-            if levels_ex:
-                lv = dict(entry.get("levels") or {})
-                lv.update(levels_ex)
-                entry["levels"] = lv
+            lv = sane_levels(entry.get("levels") or {})
+            lv.update(levels_ex)
+            entry["levels"] = lv
+            entry["yields"] = {
+                k: v for k, v in (entry.get("yields") or {}).items() if not is_junk_key(k)
+            }
             if disabled_ex:
                 entry["disabled"] = disabled_ex
             CITY_ASSETS[city] = entry
@@ -229,8 +264,8 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
 
     bag = normalize_stats_keys(dict(entry.get("stats") or get_city_asset_stats(city) or {}))
     disabled = set(entry.get("disabled") or [])
-    lv_map = dict(entry.get("levels") or {})
-    ymap = dict(entry.get("yields") or {})
+    lv_map = sane_levels(entry.get("levels") or {})
+    ymap = {k: v for k, v in (entry.get("yields") or {}).items() if not is_junk_key(k)}
     deltas = {}
 
     def _yield_of(name: str, default_y: float = 0) -> float:
@@ -242,7 +277,9 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
         candidates = []
         if ymap.get(name) is not None:
             try:
-                candidates.append(float(ymap[name]))
+                # yields از شیت فعلی بازسازی شده → مقدم بر کلیدهای قدیمی yield: در stats
+                if float(ymap[name]) > 0:
+                    return float(ymap[name])
             except (TypeError, ValueError):
                 pass
         for key in (f"yield:{name}", f"بازدهی {name}"):
@@ -456,6 +493,9 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
     for dk, dv in deltas.items():
         if dk in _econ_holders or str(dk).startswith("بازدهی") or str(dk).startswith("yield:"):
             continue
+        if is_junk_key(dk):
+            logging.warning("آپ %s: کلید زباله رد شد: %s", city, dk)
+            continue
         try:
             filtered[dk] = filtered.get(dk, 0) + float(dv)
         except (TypeError, ValueError):
@@ -478,6 +518,21 @@ def _run_weekly_up_impl(city: str, force: bool = False) -> str:
             force_snap[fk] = float(bag.get(fk) or 0)
         except (TypeError, ValueError):
             force_snap[fk] = 0.0
+    flags = [] if allow_suspicious else suspicious_deltas(deltas, bag)
+    if flags:
+        if before_entry is None:
+            CITY_ASSETS.pop(city, None)
+        else:
+            CITY_ASSETS[city] = before_entry
+        if before_snap is None:
+            UP_SNAPSHOTS.pop(city, None)
+        else:
+            UP_SNAPSHOTS[city] = before_snap
+        return (
+            f"{UP_HOLD} {city}: آپ متوقف شد — بازدهی مشکوک (هیچ تغییری اعمال نشد)\n"
+            + "\n".join(f"⚠️ {f}" for f in flags)
+            + "\nشیت را بررسی کنید؛ اگر درست است، ادمین آپ را تأیید کند."
+        )
     log = apply_stat_delta(city, deltas, note=note)
     # اگر به‌اشتباه موجودی کمتر از (قبلی + بازدهی) شد، اصلاح کن
     e_fix = CITY_ASSETS.get(city) or {}
@@ -522,26 +577,26 @@ async def send_up_receipts(city: str, log: str, to_city: bool = True):
     """رسید آپ: گپ شهر + پیوی فرمانده + ادمین. to_city=False → فقط ادمین‌ها (کارنامه جدا رفته)."""
     body = (
         f"🧾 <b>رسید آپ هفتگی</b>\n{DIV}\n"
-        f"🏙 <b>{e(city)}</b>\n\n{log}\n\n"
+        f"🏙 <b>{e(city)}</b>\n\n{e(log)}\n\n"
         f"📜 جزئیات در منوی اقتصادی → تغییرات اخیر"
     )
     # گپ‌های ست‌شدهٔ همین شهر
     for gid in (groups_of_city(city) if to_city else []):
         try:
-            await bot.send_message(gid, body[:4000])
+            await bot.send_message(gid, html_cut(body))
         except Exception:
             logging.exception("رسید آپ به گپ %s", gid)
     for uid in (player_ids_for_city(city) if to_city else []):
         try:
-            await bot.send_message(uid, body[:4000])
+            await bot.send_message(uid, html_cut(body))
         except Exception:
             logging.exception("رسید آپ به پلیر %s", uid)
     try:
-        await bot.send_message(ADMIN_ID, body[:4000])
+        await bot.send_message(ADMIN_ID, html_cut(body))
     except Exception:
         logging.exception("رسید آپ به ادمین")
     if app_state.ASSET_ADMIN_ID and app_state.ASSET_ADMIN_ID != ADMIN_ID:
         try:
-            await bot.send_message(app_state.ASSET_ADMIN_ID, body[:4000])
+            await bot.send_message(app_state.ASSET_ADMIN_ID, html_cut(body))
         except Exception:
             pass
