@@ -296,7 +296,7 @@ def format_stats_labeled(bag: dict) -> str:
             if k in bag:
                 v = bag[k]
                 num = int(v) if float(v) == int(float(v)) else v
-                rows.append(f"  • {k}: <b>{num}</b>")
+                rows.append(f"  • {e(k)}: <b>{num}</b>")
                 used.add(k)
         # تطبیق بدون حساسیت به فاصله/ی
         for k, v in bag.items():
@@ -306,7 +306,7 @@ def format_stats_labeled(bag: dict) -> str:
             for key in keys:
                 if kn == key.replace("\u200c", "").replace(" ", ""):
                     num = int(v) if float(v) == int(float(v)) else v
-                    rows.append(f"  • {k}: <b>{num}</b>")
+                    rows.append(f"  • {e(k)}: <b>{num}</b>")
                     used.add(k)
                     break
         if rows:
@@ -317,7 +317,7 @@ def format_stats_labeled(bag: dict) -> str:
         if k in used:
             continue
         num = int(v) if float(v) == int(float(v)) else v
-        other.append(f"  • {k}: <b>{num}</b>")
+        other.append(f"  • {e(k)}: <b>{num}</b>")
     if other:
         lines.append("<b>📋 سایر</b>")
         lines.extend(other)
@@ -353,6 +353,7 @@ def format_city_asset_view(city: str, viewer: int | None = None) -> str:
     flag, title = FACTION_META.get(side, ("", side or "؟")) if side else ("", "؟")
     text = get_city_asset_text(city)
     header = f"📦 <b>دارایی شخصی — {e(city)}</b>\n🏴 ساید: {flag}{title}\n{DIV}\n"
-    body = header + (text or "— برای این شهر هنوز دارایی ثبت نشده —")
+    # متن شیت خام کاربر است — بدون escape، «<» داخلش پارس HTML تلگرام را می‌شکند
+    body = header + (e(text) if text else "— برای این شهر هنوز دارایی ثبت نشده —")
     trait = castle_trait_block(city, viewer)
     return f"{body}\n\n{trait}" if trait else body

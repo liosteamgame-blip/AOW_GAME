@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import ADMIN_ID, DIV
 from app.loader import bot, dp
 from app.state import GROUPS, all_players, authenticated_users, pending_confirms
-from app.utils import e, is_back_text, norm_cmd, send_chunks
+from app.utils import e, html_chunks, html_cut, is_back_text, norm_cmd, send_chunks
 from app.rulecal import admin_tag, block_message
 from app.factions import _canonical_city_name, country_key
 from app.states import GameStates
@@ -67,7 +67,7 @@ async def _register_asset_now(message: types.Message, state: FSMContext, raw: st
     if side:
         body += format_realm_view(side)
     await state.clear()
-    await message.answer(body[:4000], reply_markup=get_admin_inline_keyboard() if is_admin(message.from_user.id) else None)
+    await message.answer(html_cut(body), reply_markup=get_admin_inline_keyboard() if is_admin(message.from_user.id) else None)
 
 
 @dp.message(F.text.regexp(r"(?i)^\s*اعمال\s*ارتقا"))
@@ -143,11 +143,8 @@ async def handle_view_assets_in_chat(message: types.Message, state: FSMContext):
     if not ok or not city:
         return await message.answer(err or "❌ دسترسی یا شهر مشخص نیست.")
     text = format_city_asset_view(city, viewer=uid)
-    chunks = []
-    body = text
-    while body:
-        chunks.append(body[:3500])
-        body = body[3500:]
+    # قبلاً body[:3500] تگ <b> بلوک ویژگی قلعه را وسط می‌برید → کرش «Can't find end tag»
+    chunks = html_chunks(text, 3500)
     for i, ch in enumerate(chunks):
         if i == len(chunks) - 1:
             builder = InlineKeyboardBuilder()
@@ -158,9 +155,9 @@ async def handle_view_assets_in_chat(message: types.Message, state: FSMContext):
                 builder.row(_btn("📉 ثبت تلفات", f"gasset:loss:{city}", "danger"))
                 builder.row(_btn("🎛 باف/نرف/رول", f"gasset:buff:{city}", "primary"))
             builder.row(_btn("🔄 تازه‌سازی", f"gasset:view:{city}"))
-            await message.answer(ch[:4000], reply_markup=builder.as_markup())
+            await message.answer(ch, reply_markup=builder.as_markup())
         else:
-            await message.answer(ch[:4000])
+            await message.answer(ch)
 
 
 @dp.callback_query(F.data.startswith("gasset:"))
@@ -335,7 +332,7 @@ async def asset_confirm_city(callback: types.CallbackQuery, state: FSMContext):
     else:
         body += "⚠️ ساید شهر تشخیص داده نشد؛ در جمع قلمرو لحاظ نمی‌شود."
     await callback.message.answer(
-        body[:4000],
+        html_cut(body),
         reply_markup=get_admin_inline_keyboard() if is_admin(callback.from_user.id) else None,
     )
 
@@ -374,7 +371,7 @@ async def handle_set_assets_city(message: types.Message, state: FSMContext):
         body += format_realm_view(side)
     else:
         body += "⚠️ ساید شهر تشخیص داده نشد؛ در جمع قلمرو لحاظ نمی‌شود."
-    await message.answer(body[:4000], reply_markup=get_admin_inline_keyboard())
+    await message.answer(html_cut(body), reply_markup=get_admin_inline_keyboard())
 
 
 @dp.message(F.chat.type.in_({"group", "supergroup"}), F.text.func(lambda t: norm_cmd(t) in GROUP_INQUIRY_CMDS))

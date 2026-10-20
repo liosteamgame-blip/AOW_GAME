@@ -12,7 +12,7 @@ from app.features import enabled
 from app.loader import bot
 from app.players import groups_of_city, player_ids_for_city
 from app.state import CITY_ASSETS, CITY_RANKS, UP_SNAPSHOTS
-from app.utils import e, fmt_num
+from app.utils import e, fmt_num, html_cut
 from app.economy.rules import FORCE_UNIT_NAMES
 from app.economy.sheet import normalize_stats_keys
 from app.economy.views import RANK_CATS, RANK_TITLES, city_ranks, rank_arrow
@@ -123,7 +123,7 @@ def build_card(city: str, update_rank: bool = True) -> str:
         lines.extend(ranks)
     lines.append("\n" + advisor_line(city))
     lines.append("\n<i>📜 جزئیات: منوی اقتصادی ← تغییرات اخیر</i>")
-    return "\n".join(lines)[:4000]
+    return html_cut("\n".join(lines))
 
 
 async def send_up_result(city: str, log: str):

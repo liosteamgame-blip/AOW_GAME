@@ -16,6 +16,64 @@ def e(value):
     return html.escape(str(value), quote=False)
 
 
+_TAG_RE = re.compile(r"<(/?)([a-zA-Z-]+)[^>]*>")
+
+
+def _open_tags(text: str) -> list:
+    """تگ‌های HTML باز در انتهای متن (به ترتیب باز شدن)."""
+    stack = []
+    for m in _TAG_RE.finditer(text):
+        closing, name = m.group(1), m.group(2).lower()
+        if closing:
+            for i in range(len(stack) - 1, -1, -1):
+                if stack[i][0] == name:
+                    del stack[i:]
+                    break
+        else:
+            stack.append((name, m.group(0)))
+    return stack
+
+
+def html_chunks(text: str, limit: int = 3800) -> list:
+    """
+    تقسیم متن HTML به تکه‌های ≤ limit بدون شکستن تگ‌ها (کرش «Can't find end tag»).
+    از مرز خط می‌بُرد؛ تگ باز در انتهای هر تکه بسته و در تکه‌ی بعد دوباره باز می‌شود.
+    """
+    text = text or ""
+    if len(text) <= limit:
+        return [text] if text else []
+    margin = 64  # جا برای تگ‌های بستن/بازکردن دوباره
+    room = max(200, limit - margin * 2)
+    lines = []
+    for ln in text.split("\n"):
+        # خط خیلی بلند (متن شیت بدون تگ) را تکه کن
+        while len(ln) > room:
+            lines.append(ln[:room])
+            ln = ln[room:]
+        lines.append(ln)
+    chunks, cur = [], ""
+    for ln in lines:
+        add = ln if not cur else "\n" + ln
+        if cur and len(cur) + len(add) > room:
+            stack = _open_tags(cur)
+            chunks.append(cur + "".join(f"</{n}>" for n, _t in reversed(stack)))
+            cur = "".join(t for _n, t in stack) + ln
+        else:
+            cur += add
+    if cur.strip():
+        stack = _open_tags(cur)
+        chunks.append(cur + "".join(f"</{n}>" for n, _t in reversed(stack)))
+    return chunks
+
+
+def html_cut(text: str, limit: int = 4000) -> str:
+    """جایگزین امن text[:limit] برای پیام HTML: از مرز خط می‌بُرد و تگ‌های باز را می‌بندد."""
+    parts = html_chunks(text, limit)
+    if len(parts) <= 1:
+        return parts[0] if parts else ""
+    return parts[0] + "\n…"
+
+
 def num_plain(value, decimals: int = 2) -> str:
     """عدد برای متن شیت (که دوباره پارس می‌شود): بدون جداکننده و بدون نماد علمی."""
     try:
@@ -71,6 +129,8 @@ async def send_chunks(target: types.Message, blocks, reply_markup=None, limit=38
         chunk += b + "\n"
     if chunk:
         parts.append(chunk)
+    # بلوک بزرگ‌تر از سقف: تقسیم امن (بدون شکستن تگ HTML)
+    parts = [c for p in parts for c in html_chunks(p, limit)]
     for i, p in enumerate(parts):
         await target.answer(p, reply_markup=reply_markup if i == len(parts) - 1 else None)
 
