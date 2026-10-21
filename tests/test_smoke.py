@@ -81,3 +81,14 @@ class SmokeTests(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArtTests(unittest.TestCase):
+    def test_removed_art_is_never_loaded(self):
+        """صاحب ربات خواست art_campaign_land_england_2.jpg کلاً حذف شود و در هیچ پستی استفاده نشود."""
+        from app.art import ART, load_art
+        load_art()
+        names = [path for group in ART.values() for arts in group.values() for _src, path in arts]
+        self.assertTrue(names, "art.zip باید لود شود")
+        self.assertFalse([n for n in names if n.endswith("art_campaign_land_england_2.jpg")])
+        self.assertEqual(len(ART[("campaign", "land")]["england"]), 5)
