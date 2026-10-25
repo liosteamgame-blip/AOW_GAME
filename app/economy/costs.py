@@ -3,20 +3,42 @@ import re
 
 from app.state import CITY_BUFFS
 from app.utils import _norm_country_token
-from app.economy.rules import UPGRADE_TABLE, _RES_MAP
-from app.economy.sheet import _sum_force_soldiers, normalize_stats_keys
+from app.economy.rules import (
+    CAVALRY_UNITS, FOOD_PER, INFANTRY_UNITS, SPECIAL_UNITS, UPGRADE_TABLE, _RES_MAP,
+)
+from app.economy.sheet import force_soldier_counts, normalize_stats_keys
 
 
-def count_army_soldiers(bag: dict) -> int:
-    """تعداد نفر سرباز زمینی (هر نفر = ۱ غذا در آپ). توپ و کشتی حساب نمی‌شوند."""
-    bag = bag or {}
-    total = float(_sum_force_soldiers(bag) or 0)
-    if total <= 0:
+def unit_food_class(name: str) -> str:
+    """دسته‌ی مصرف غذا طبق قوانین: inf (پیاده، ۱) · cav (سواره، ۲) · elite (کمپ ویژه، ۳)."""
+    if name in INFANTRY_UNITS:
+        return "inf"
+    if name in CAVALRY_UNITS:
+        return "cav"
+    if name == "ویژه" or (SPECIAL_UNITS.get(name) or {}).get("cat") in ("inf", "cav"):
+        return "elite"
+    # یونیت ناشناس شیت (مزدور، چریک، …): با نامش؛ ویژه فرض نمی‌شود
+    return "cav" if "سوار" in str(name) else "inf"
+
+
+def army_food_need(bag: dict) -> dict:
+    """
+    مصرف غذای هفتگی ارتش: پیاده ×۱، سواره ×۲، ویژه ×۳ (توپ و کشتی غذا نمی‌خورند).
+    خروجی: {"inf": نفر، "cav": نفر، "elite": نفر، "food": جمع غذا}
+    """
+    out = {"inf": 0.0, "cav": 0.0, "elite": 0.0}
+    counts = force_soldier_counts(bag or {})
+    if not counts:
+        # شیت بدون لیست نیرو: فقط «سربازان» → پیاده فرض می‌شود (رفتار قبلی)
         try:
-            total = float(bag.get("سربازان") or 0)
+            out["inf"] = max(0.0, float((bag or {}).get("سربازان") or 0))
         except (TypeError, ValueError):
-            total = 0
-    return int(round(total))
+            pass
+    for name, n in counts.items():
+        out[unit_food_class(name)] += n
+    out = {k: int(round(v)) for k, v in out.items()}
+    out["food"] = sum(out[k] * FOOD_PER[k] for k in ("inf", "cav", "elite"))
+    return out
 
 
 def _fmt_upgrade_cost(name: str, city: str | None = None) -> str:

@@ -405,14 +405,15 @@ def extract_asset_stats(text: str) -> dict:
     return out
 
 
-def _sum_force_soldiers(bag: dict) -> int:
-    """جمع نفر سرباز از لیست نیرو (بدون توپ و کشتی).
+def force_soldier_counts(bag: dict) -> dict:
+    """تعداد نفر هر یونیت سرباز در لیست نیرو (بدون توپ و کشتی): نام → تعداد.
     یونیت‌های ویژه پیاده/سواره هر شهر از SPECIAL_UNITS + شیت همان گپ حساب می‌شوند.
     """
     bag = bag or {}
     keys = [
         "شبه نظامی", "شمشیرزن", "نیزه دار", "رایفلدار", "افسر",
         "سواره نظام شمشیرزن", "سواره‌نظام زره پوش", "سواره‌نظام تفنگدار",
+        "ویژه",
         "کیوراسیرها", "رایفلداران مدرن", "کلداستریم گارد", "گرنادیر گارد",
         "رایفلداران اسکاتلندی", "چریک هلندی",
         "گاردپادشاهی فرانسه", "رایفلداران ایرلندی", "سواره‌نظام دراگون",
@@ -422,19 +423,18 @@ def _sum_force_soldiers(bag: dict) -> int:
     for _su, _meta in (SPECIAL_UNITS or {}).items():
         if (_meta or {}).get("cat") in ("inf", "cav") and _su not in keys:
             keys.append(_su)
-    total = 0.0
-    seen = set()
+    counts = {}
     for k in keys:
-        if k in seen:
+        if k in counts:
             continue
-        seen.add(k)
         try:
-            total += float(bag.get(k) or 0)
+            n = float(bag.get(k) or 0)
         except (TypeError, ValueError):
-            pass
+            n = 0.0
+        counts[k] = n
     skip = {"توپ", "کشتی", "ناو", "قایق", "اسب", "سکه", "چوب", "سنگ", "آهن", "باروت", "پوشاک"}
     for k, v in bag.items():
-        if k in seen or any(s in str(k) for s in skip):
+        if k in counts or any(s in str(k) for s in skip):
             continue
         # توپخانه امپراطوری و کشتی‌های ویژه = نه نفر سرباز
         if k in (SPECIAL_UNITS or {}) and (SPECIAL_UNITS.get(k) or {}).get("cat") in ("arty", "ship"):
@@ -445,8 +445,14 @@ def _sum_force_soldiers(bag: dict) -> int:
             except (TypeError, ValueError):
                 continue
             if 0 < n < 500000:
-                total += n
-    return int(round(total))
+                counts[k] = n
+    return {k: n for k, n in counts.items() if n > 0}
+
+
+def _sum_force_soldiers(bag: dict) -> int:
+    """جمع نفر سرباز از لیست نیرو (بدون توپ و کشتی)."""
+    return int(round(sum(force_soldier_counts(bag).values())))
+
 
 def get_city_asset_text(city: str) -> str:
     """متن کامل شیت — بدون هیچ ویرایش."""

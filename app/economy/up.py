@@ -28,7 +28,7 @@ from app.economy.sheet import (
     sane_levels,
     with_manual_offsets,
 )
-from app.economy.costs import count_army_soldiers
+from app.economy.costs import army_food_need
 from app.economy.assets import _append_change, apply_stat_delta, is_auto_city, is_building_locked
 
 
@@ -470,13 +470,14 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
         deltas["سکه"] = deltas.get("سکه", 0) + 250
         buff_notes.append("اقتدار اوج: +۲۵۰ سکه مردمی")
 
-    # مصرف غذا: هر نفر سرباز ارتش (جمع لیست نیرو، بدون توپ/کشتی) = ۱ غذا
-    soldiers = count_army_soldiers(bag)
-    if soldiers <= 0:
-        soldiers = int(float(bag.get("سربازان") or 0) or 0)
-    if soldiers > 0:
-        deltas["غذا"] = deltas.get("غذا", 0) - soldiers
-        buff_notes.append(f"مصرف غذا = تعداد ارتش {soldiers} (−{soldiers} غذا)")
+    # مصرف غذای ارتش طبق قوانین: پیاده ×۱، سواره ×۲، ویژه ×۳ (توپ/کشتی ندارند)
+    need = army_food_need(bag)
+    if need["food"] > 0:
+        deltas["غذا"] = deltas.get("غذا", 0) - need["food"]
+        buff_notes.append(
+            f"مصرف غذا: پیاده {need['inf']}×۱ + سواره {need['cav']}×۲ + ویژه {need['elite']}×۳"
+            f" = −{fmt_num(need['food'])}"
+        )
 
     # بازدهی رول ذخیره‌شده + باف/نرف رول شیت
     entry = CITY_ASSETS.get(city) or {}

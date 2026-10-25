@@ -141,12 +141,12 @@ class CastleTraitTests(Base):
         self.assertFalse(see(OTHER), "لیدر/فرمانده جناح دیگر")
         self.assertFalse(see(None))
 
-    def test_amiens_marked_unverified(self):
+    def test_amiens_field_cannon_is_siege_cannon(self):
+        """rules.txt: «توپ محاصره … بازدهی ۴ توپ صحرایی» → دیگر «تأیید نشده» نیست."""
         from app.castles import castle_trait_block, castle_trait_line
-        self.assertIn("تأیید نشده", castle_trait_block("amiens_france", ADMIN))
-        self.assertIn("توپ صحرایی", castle_trait_block("amiens_france", ADMIN))
-        self.assertIn("تأیید نشده", castle_trait_line("amiens_france"))
-        self.assertNotIn("تأیید نشده", castle_trait_line(LONDON))
+        self.assertIn("توپ صحرایی (توپ محاصره)", castle_trait_block("amiens_france", ADMIN))
+        self.assertNotIn("تأیید نشده", castle_trait_block("amiens_france", ADMIN))
+        self.assertNotIn("تأیید نشده", castle_trait_line("amiens_france"))
 
     async def test_up_preview_reminder_and_no_effect_on_calc(self):
         state.CITY_ASSETS[LONDON] = {"text": "", "stats": {"سکه": 0}, "yields": {"خزانه": 1000}}
