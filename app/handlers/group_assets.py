@@ -195,7 +195,8 @@ async def handle_gasset_menu(callback: types.CallbackQuery, state: FSMContext):
             "مثال مزدوری:\n"
             "<code>مزدوری شمشیرزن 50 (10)</code>\n"
             "<code>گارد 20 (5)</code>\n"
-            "عدد پرانتز = بازدهی هفتگی در آپ.",
+            "عدد پرانتز = بازدهی هفتگی در آپ.\n"
+            "پست‌های کانال شاپ یا نام آیتم کاتالوگ (مثلاً <code>چریک هلندی</code>) هم کافی است.",
             reply_markup=get_back_keyboard(),
         )
         await state.set_state(GameStates.adm_shop_collect)

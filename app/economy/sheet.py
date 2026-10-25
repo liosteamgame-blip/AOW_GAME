@@ -4,6 +4,7 @@ import re
 from app.audit import audited
 from app.state import CITY_ASSETS, is_junk_key
 from app.utils import _clean_item_name, fmt_num, format_goods, normalize_digits, num_plain
+from app.economy import shop_catalog
 from app.economy.rules import FORCE_UNIT_NAMES, SPECIAL_UNITS, UPGRADE_TABLE
 
 
@@ -519,7 +520,9 @@ def set_city_asset(city: str, text: str):
         elif yv > 0 and abs(new_v - yv) < 0.01 and old_v > new_v:
             # خط کمپ بدون لول که عددش همان بازدهی است ≠ موجودی
             stats[fk] = old_v
-    shop = _parse_shop_from_sheet(text)
+    # پک‌های شیت ثبت‌شده «قبلاً اعطاشده» حساب می‌شوند (ثبت شیت هیچ‌وقت چیزی اعطا نمی‌کند)
+    shop_packs = [dict(pk, granted=True) for pk in enrich_shop_packs(_parse_shop_packs(text))]
+    shop = shop_weekly_yields(shop_packs)
     # بازسازی کامل از شیت فعلی — قبلاً با مقادیر قبلی merge می‌شد و کلیدهای یتیم/خراب ماندگار بودند
     merged_lv = sane_levels(levels_ex)
     offsets = manual_offsets(prev)
@@ -537,6 +540,7 @@ def set_city_asset(city: str, text: str):
         "levels": merged_lv,
         "disabled": disabled,
         "shop": shop,
+        "shop_packs": shop_packs,
         MANUAL_YIELDS: offsets,
     }
     return stats
@@ -961,31 +965,91 @@ def parse_roll_buff_form(text: str) -> dict:
     return {"rolls": rolls, "buffs": buffs, "flat": flat}
 
 
-def _parse_shop_from_sheet(text: str) -> dict:
-    """بازدهی عددی شاپ برای آپ: نام → عدد صحیح."""
-    packs = _parse_shop_packs(text)
+def shop_weekly_yields(packs: list) -> dict:
+    """
+    بازدهی هفتگی پک‌های شاپ برای آپ: نام → عدد صحیح.
+    طبق قوانین شاپ فقط «بازدهی» صریح هر آپ تکرار می‌شود. «تعداد» یونیت مزدور، ارتش همراه هیرو
+    و نیروی گروهک یک‌بار هنگام خرید است (shop_pack_grant). قبلاً این تعدادها هر آپ دوباره اضافه می‌شدند.
+    """
     out = {}
-    for pk in packs:
+    for pk in packs or []:
         y = int(pk.get("yield") or 0)
         unit = (pk.get("unit") or pk.get("name") or "").strip()
         if y > 0 and unit:
             out[unit] = out.get(unit, 0) + y
-        # ارتش همراه هیرو
         for u in pk.get("army") or []:
             uy = int(u.get("yield") or 0)
             un = (u.get("unit") or "").strip()
             if uy > 0 and un:
                 out[un] = out.get(un, 0) + uy
-            elif un and int(u.get("count") or 0) > 0 and uy == 0:
-                # فقط تعداد — در آپ همان تعداد به نیرو اضافه می‌شود
-                out[un] = out.get(un, 0) + int(u.get("count") or 0)
-        # گروهک: تعداد یونیت
-        if pk.get("kind") in ("merc_group", "merc", "spy", "guard") and pk.get("count"):
-            un = (pk.get("unit") or pk.get("name") or "").strip()
-            c = int(pk.get("count") or 0)
-            if un and c > 0 and y <= 0:
-                out[un] = out.get(un, 0) + c
     return {k: v for k, v in out.items() if not is_junk_key(k)}
+
+
+def _parse_shop_from_sheet(text: str) -> dict:
+    """بازدهی عددی شاپ برای آپ: نام → عدد صحیح."""
+    return shop_weekly_yields(enrich_shop_packs(_parse_shop_packs(text)))
+
+
+def enrich_shop_packs(packs: list) -> list:
+    """
+    پر کردن پک‌ها از کاتالوگ شاپ (rules.txt): دسته، تعداد و بازدهی یونیت مزدور/جاسوس/گارد،
+    ارتش همراه هیرو و گروهک. عددی که ادمین صریح نوشته باشد بر کاتالوگ مقدم است.
+    """
+    out = []
+    for pk in packs or []:
+        pk = dict(pk)
+        item = shop_catalog.find_item(pk.get("name") or pk.get("unit") or "")
+        if not item:
+            out.append(pk)
+            continue
+        cat = item["cat"]
+        pk.update({"kind": cat, "catalog": item["fa"], "name": item["fa"]})
+        if cat in ("merc", "spy", "guard"):
+            pk["unit"] = item["fa"]
+            pk["count"] = int(pk.get("count") or 0) or item["count"]
+            pk["yield"] = int(pk.get("yield") or 0) or item["yield"]
+        elif cat in ("hero", "merc_group"):
+            pk["unit"] = item["fa"]
+            if not pk.get("army"):
+                pk["army"] = [{"unit": u, "count": n, "yield": 0} for n, u in item.get("army") or []]
+            pk["count"] = 0
+            pk["yield"] = 0
+        else:
+            pk["unit"] = item["fa"]
+            pk["count"] = 0
+            pk["yield"] = 0
+        out.append(pk)
+    return out
+
+
+def shop_pack_grant(pk: dict) -> dict:
+    """آنچه یک‌بار هنگام ثبت خرید به دارایی اضافه می‌شود."""
+    kind = pk.get("kind")
+    out = {}
+    if kind in ("merc", "spy", "guard"):
+        un = (pk.get("unit") or pk.get("name") or "").strip()
+        c = int(pk.get("count") or 0)
+        if un and c > 0:
+            out[un] = c
+    elif kind in ("hero", "merc_group"):
+        for u in pk.get("army") or []:
+            un = (u.get("unit") or "").strip()
+            c = int(u.get("count") or 0)
+            if un and c > 0:
+                out[un] = out.get(un, 0) + c
+        if kind == "merc_group" and not pk.get("army") and int(pk.get("count") or 0) > 0:
+            un = (pk.get("unit") or "").strip()
+            if un:
+                out[un] = int(pk["count"])
+    elif kind in ("resources", "starter"):
+        item = shop_catalog.find_item(pk.get("catalog") or pk.get("name") or "")
+        if item:
+            out = shop_catalog.one_time_grant(item)
+    return {k: v for k, v in out.items() if not is_junk_key(k)}
+
+
+def shop_pack_key(pk: dict) -> str:
+    return shop_catalog._norm(pk.get("catalog") or pk.get("name") or pk.get("unit") or "")
 
 
 def _parse_shop_packs(text: str) -> list:
@@ -1031,6 +1095,9 @@ def _parse_shop_packs(text: str) -> list:
             while i < len(lines):
                 al = lines[i]
                 if re.search(r"وزیر|هیرو|قهرمان|فرمانده|گروهک|مزدور|جاسوس|گارد|🥷|🤵|💵", al, re.I):
+                    break
+                # پک بعدی کاتالوگ با نام ساده (بدون عدد اول خط) جزو ارتش همراه نیست
+                if not re.match(r"^\s*[\d۰-۹]", al) and shop_catalog.find_item(al):
                     break
                 # "50 ژاندارم" یا "ژاندارم: 50" یا "(100) : 300"
                 mm = re.search(
@@ -1171,6 +1238,8 @@ def _format_shop_packs(packs: list) -> str:
                     lines.append(f"  {u.get('count')} {u.get('unit')}")
                 elif u.get("yield"):
                     lines.append(f"  {u.get('unit')} ({u.get('yield')})")
+        elif k == "merc_group" and pk.get("catalog"):
+            lines.append(f"گروهک مزدوری {pk.get('catalog')}")
         elif k == "merc_group":
             lines.append(f"گروهک مزدوری {pk.get('unit') or pk.get('name')}: {pk.get('count') or 0}")
         elif k in ("merc", "spy", "guard"):

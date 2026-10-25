@@ -21,11 +21,13 @@ from app.economy.sheet import (
     _apply_stock_to_sheet,
     _parse_shop_from_sheet,
     _sum_force_soldiers,
+    enrich_shop_packs,
     extract_asset_stats,
     get_city_asset_stats,
     manual_offsets,
     normalize_stats_keys,
     sane_levels,
+    shop_weekly_yields,
     with_manual_offsets,
 )
 from app.economy.costs import army_food_need
@@ -514,7 +516,10 @@ def _run_weekly_up_impl(city: str, force: bool = False, allow_suspicious: bool =
         buff_notes.append(f"رول‌باف {kind} {target} {fmt_num(pct)}%→{dest}{delta:+.1f}")
 
     # شاپ: بازدهی پک‌ها (عدد داخل پرانتز)
-    shop = dict(entry.get("shop") or {})
+    # از پک‌ها دوباره حساب می‌شود تا «shop» ذخیره‌شده‌ی قدیمی (که تعداد ارتش همراه هیرو/گروهک را
+    # هر آپ تکرار می‌کرد) اثر نگذارد
+    packs = entry.get("shop_packs") or []
+    shop = shop_weekly_yields(enrich_shop_packs(packs)) if packs else dict(entry.get("shop") or {})
     if not shop:
         shop = _parse_shop_from_sheet(entry.get("text") or "")
     for item, yv in shop.items():

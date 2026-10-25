@@ -22,6 +22,7 @@ app.art
 app.channel
 app.menus
 app.economy.rules
+app.economy.shop_catalog
 app.castles
 app.economy.sheet
 app.economy.costs

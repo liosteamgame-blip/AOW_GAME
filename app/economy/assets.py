@@ -11,6 +11,7 @@ from app.utils import _clean_item_name, _norm_country_token, e, fmt_num, normali
 from app.factions import all_known_cities, cities_for_side_assets, country_key
 from app.storage import save_data
 from app.audit import audited
+from app.economy import shop_catalog
 from app.economy.rules import (
     CASTLE_CAPACITY,
     CASTLE_LEVEL_INFO,
@@ -26,6 +27,10 @@ from app.economy.sheet import (
     _parse_shop_from_sheet,
     _parse_shop_packs,
     _patch_sheet_level_yield,
+    enrich_shop_packs,
+    shop_pack_grant,
+    shop_pack_key,
+    shop_weekly_yields,
     _patch_warehouse_cap,
     _strip_auto_footers,
     _sum_force_soldiers,
@@ -668,9 +673,26 @@ def _append_change(city: str, line: str):
 
 @audited("ست شاپ", city_arg=1)
 async def _commit_shop_text(message: types.Message, city: str, body: str):
-    packs = _parse_shop_packs("شاپ:\n" + body)
-    shop = _parse_shop_from_sheet("شاپ:\n" + body)
+    body, unknown_posts = shop_catalog.collapse_shop_posts(body)
+    packs = enrich_shop_packs(_parse_shop_packs("شاپ:\n" + body))
+    shop = shop_weekly_yields(packs)
     entry = CITY_ASSETS.setdefault(city, {"text": "", "stats": {}, "shop": {}, "shop_packs": []})
+    # «ست شاپ» کل لیست را می‌فرستد؛ پکی که قبلاً ثبت شده (حتی پیش از این نسخه) دوباره اعطا نمی‌شود
+    seen = {shop_pack_key(pk) for pk in entry.get("shop_packs") or []}
+    grants = {}
+    granted_names = []
+    for pk in packs:
+        key = shop_pack_key(pk)
+        if key in seen:
+            pk["granted"] = True
+            continue
+        seen.add(key)
+        g = shop_pack_grant(pk)
+        for k, v in g.items():
+            grants[k] = grants.get(k, 0) + v
+        if g:
+            granted_names.append(pk.get("name") or pk.get("unit") or "")
+        pk["granted"] = True
     entry["shop"] = shop
     entry["shop_packs"] = packs
     text = _strip_auto_footers(entry.get("text") or "")
@@ -682,9 +704,18 @@ async def _commit_shop_text(message: types.Message, city: str, body: str):
     CITY_ASSETS[city] = entry
     _append_change(city, f"ست شاپ ({len(packs)} پک)")
     save_data(critical=True)
+    grant_log = ""
+    if grants:
+        grant_log = apply_stat_delta(city, grants, note="شاپ یک‌باره: " + "، ".join(granted_names))
     lines = [f"🛒 <b>شاپ {e(city)}</b> — {len(packs)} پک ثبت شد\n{DIV}"]
     for pk in packs:
         k = pk.get("kind")
+        item = shop_catalog.find_item(pk.get("catalog") or "") if pk.get("catalog") else None
+        if item and k not in ("minister", "hero", "merc_group", "merc", "spy", "guard"):
+            note = shop_catalog.admin_note(item)
+            lines.append(f"{shop_catalog.CATEGORIES.get(k, '•')}: <b>{e(item['fa'])}</b>"
+                         + (f"\n   ✋ {e(note)}" if note else ""))
+            continue
         if k == "minister":
             lines.append(f"🤵 وزیر: <b>{e(pk.get('name'))}</b>")
         elif k == "hero":
@@ -699,7 +730,14 @@ async def _commit_shop_text(message: types.Message, city: str, body: str):
             y = pk.get("yield") or 0
             lines.append(f"• {e(pk.get('name'))}" + (f" → آپ +{y}" if y else ""))
     if shop:
-        lines.append(f"\n📊 بازدهی آپ: {len(shop)} مورد")
+        lines.append(f"\n📊 بازدهی هر آپ: " + "، ".join(f"{e(k)} +{fmt_num(v)}" for k, v in shop.items()))
+    if grants:
+        lines.append(f"\n🎁 <b>اعطای یک‌باره</b> (فقط پک‌های جدید):\n{e(grant_log)}")
+    if unknown_posts:
+        lines.append("\n❓ پست شاپ در کاتالوگ نبود (ثبت نشد):\n" + "\n".join(f"• {e(u)}" for u in unknown_posts))
+    warns = shop_catalog.limit_warnings([pk.get("kind") for pk in packs])
+    if warns:
+        lines.append("\n⚠️ <b>بیش از سقف خرید قوانین شاپ:</b>\n" + "\n".join(f"• {e(w)}" for w in warns))
     await message.answer("\n".join(lines))
 
 
